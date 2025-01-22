@@ -145,6 +145,11 @@ class Simulation:
         elif configured_policy == "probabilistic-strictAlt" or configured_policy == "fgcs24":
             self.config.set(conf.SEC_POLICY, conf.MULTIPLE_OFFLOADING_ALLOWED, "false")
             return probabilistic.ProbabilisticPolicy(self, node, True)
+        # --------------------------------------------------------------------------------------
+        elif configured_policy == "probabilistic-predictive":
+            print("pp")
+            return probabilistic.ProbabilisticPredictivePolicy(self, node)
+        # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-offline":
             return probabilistic.OfflineProbabilisticPolicy(self, node)
         elif configured_policy == "probabilistic-offline-strict":
@@ -208,7 +213,6 @@ class Simulation:
 
         self.policy_update_interval = self.config.getfloat(conf.SEC_POLICY, conf.POLICY_UPDATE_INTERVAL, fallback=-1)
         self.rate_update_interval = self.config.getfloat(conf.SEC_SIM, conf.RATE_UPDATE_INTERVAL, fallback=-1)
-        print(self.rate_update_interval)
         self.stats_print_interval = self.config.getfloat(conf.SEC_SIM, conf.STAT_PRINT_INTERVAL, fallback=-1)
         self.stats_file = sys.stdout
 
@@ -242,6 +246,10 @@ class Simulation:
 
 
         if self.policy_update_interval > 0.0:
+            # --------------------------------------------------------------------------------------
+            print(f"policy_update_interval: {self.policy_update_interval}")
+            # --------------------------------------------------------------------------------------
+            # Heap-push dell'evento di update della policy
             self.schedule(self.policy_update_interval, PolicyUpdate())
         if self.rate_update_interval > 0.0:
             self.schedule(self.rate_update_interval, ArrivalRateUpdate())
@@ -252,7 +260,11 @@ class Simulation:
                 self.stats_file = open(stats_print_filename, "w")
 
         while len(self.events) > 0:
+            # --------------------------------------------------------------------------------------
+            # Heap-pop di un evento, il primo dovrebbe essere un arrivo
             t,e = heappop(self.events)
+            # --------------------------------------------------------------------------------------
+            # Gestione dell'evento appena estratto
             self.handle(t, e)
 
         if self.stats_print_interval > 0:
@@ -260,7 +272,8 @@ class Simulation:
             print("]", file=self.stats_file)
             if self.stats_file != sys.stdout:
                 self.stats_file.close()
-                self.stats.print(sys.stdout)
+                # --------------------------------------------------------------------------------------
+                #self.stats.print(sys.stdout)
         elif self.config.getboolean(conf.SEC_SIM, conf.PRINT_FINAL_STATS, fallback=True):
             self.stats.print(sys.stdout)
         else:
@@ -340,14 +353,25 @@ class Simulation:
         if self.__event_counter % 10000 == 0:
             print(t)
             self.__event_counter = 0
+
         if isinstance(event, Arrival):
+            # --------------------------------------------------------------------------------------
+            print("Arrival")
             self.handle_arrival(event)
         elif isinstance(event, Completion):
+            # --------------------------------------------------------------------------------------
+            #print("Completion")
             self.handle_completion(event)
         elif isinstance(event, PolicyUpdate):
+            # --------------------------------------------------------------------------------------
+            # For every node and associated policy
             for n,p in self.node2policy.items():
+                print(f"************************************NODO: {n}************************************")
+                print(f"Updating Policy: [{p}]")
                 upd_t0 = time.time()
+                # Update the policy
                 p.update()
+                # Amount of updates +1, Time of update summed
                 self.stats.update_policy_upd_time(n,time.time()-upd_t0)
 
             # Migrate keys
@@ -360,17 +384,24 @@ class Simulation:
                         p.latency_estimation_cache = {}
                 self.stats.update_mig_policy_upd_time(time.time()-upd_t0)
 
+            # Scheduling del prossimo evento aggiornamento della policy fra tot secondi
             self.schedule(t + self.policy_update_interval, event)
         elif isinstance(event, ArrivalRateUpdate):
+            # --------------------------------------------------------------------------------------
+            #print("ArrivalRateUpdate")
             for n, arvs in self.node2arrivals.copy().items():
                 for arv in arvs:
                     if arv.has_dynamic_rate():
                         arv.update_dynamic_rate()
             self.schedule(t + self.rate_update_interval, event)
         elif isinstance(event, StatPrinter):
+            # --------------------------------------------------------------------------------------
+            #print("StatPrinter")
             self.print_periodic_stats()
             self.schedule(t + self.stats_print_interval, event)
         elif isinstance(event, CheckExpiredContainers):
+            # --------------------------------------------------------------------------------------
+            #print("CheckExpiredContainers")
             if len(event.node.warm_pool) == 0:
                 return
             f,timeout = event.node.warm_pool.front()
@@ -379,6 +410,8 @@ class Simulation:
                 event.node.curr_memory += f.memory
                 event.node.warm_pool.pool = event.node.warm_pool.pool[1:]
         else:
+            # --------------------------------------------------------------------------------------
+            print("Error")
             raise RuntimeError("")
 
     def handle_completion (self, event):
