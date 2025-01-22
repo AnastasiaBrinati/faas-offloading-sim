@@ -360,7 +360,7 @@ class Simulation:
             self.handle_arrival(event)
         elif isinstance(event, Completion):
             # --------------------------------------------------------------------------------------
-            print("Completion")
+            #print("Completion")
             self.handle_completion(event)
         elif isinstance(event, PolicyUpdate):
             # --------------------------------------------------------------------------------------
@@ -484,8 +484,7 @@ class Simulation:
             print(f"external, arrival from trace: {arv_proc}")
             self.stats.ext_arrivals[(f,c,n)] += 1
         else:
-            print(f"not external, arrival from: {arv_proc}")
-            print(f"offloaded from: {event.offloaded_from}")
+            print(f"not external, offloaded from: {event.offloaded_from}")
 
         # Policy
         sched_decision, target_node = node_policy.schedule(f,c,event.offloaded_from)
