@@ -147,7 +147,6 @@ class Simulation:
             return probabilistic.ProbabilisticPolicy(self, node, True)
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-predictive":
-            print("pp")
             return probabilistic.ProbabilisticPredictivePolicy(self, node)
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-offline":
@@ -244,13 +243,11 @@ class Simulation:
         # Initialize state placement
         stateful.init_key_placement (self.functions, self.infra, self.keys_rng)
 
-
+        # --------------------------------------------------------------------------------------
         if self.policy_update_interval > 0.0:
-            # --------------------------------------------------------------------------------------
-            print(f"policy_update_interval: {self.policy_update_interval}")
-            # --------------------------------------------------------------------------------------
             # Heap-push dell'evento di update della policy
             self.schedule(self.policy_update_interval, PolicyUpdate())
+        # --------------------------------------------------------------------------------------
         if self.rate_update_interval > 0.0:
             self.schedule(self.rate_update_interval, ArrivalRateUpdate())
         if self.stats_print_interval > 0.0:
@@ -304,12 +301,15 @@ class Simulation:
         self.stats.data_migrated_bytes += moved_bytes
     
     def __schedule_next_arrival(self, node, arrival_proc):
+        print("schedule arrival")
         if not self.external_arrivals_allowed:
             return
 
-        c = arrival_proc.next_class()
         iat = arrival_proc.next_iat()
         f = arrival_proc.function
+        print(f"next func: {f}")
+        c = arrival_proc.next_class()
+        print(f"next class: {c}")
 
         if iat >= 0.0 and self.t + iat < self.close_the_door_time:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
@@ -356,11 +356,11 @@ class Simulation:
 
         if isinstance(event, Arrival):
             # --------------------------------------------------------------------------------------
-            print("Arrival")
+            print("--------------------> Arrival")
             self.handle_arrival(event)
         elif isinstance(event, Completion):
             # --------------------------------------------------------------------------------------
-            #print("Completion")
+            print("Completion")
             self.handle_completion(event)
         elif isinstance(event, PolicyUpdate):
             # --------------------------------------------------------------------------------------
@@ -471,13 +471,21 @@ class Simulation:
     def handle_arrival (self, event):
         n = event.node 
         node_policy = self.node2policy[n]
+        # external: true if :   0 == 0, not offloaded (from trace)
+        #          false if :   1 == 0, offloaded
         external = len(event.offloaded_from) == 0
         arv_proc = event.arrival_proc
         f = event.function
         c = event.qos_class
+        print(f"we are on: {event.node}")
+        print(f"handling most imminent arrival event [{f}] of class [{c}]")
         self.stats.arrivals[(f,c,n)] += 1
         if external:
+            print(f"external, arrival from trace: {arv_proc}")
             self.stats.ext_arrivals[(f,c,n)] += 1
+        else:
+            print(f"not external, arrival from: {arv_proc}")
+            print(f"offloaded from: {event.offloaded_from}")
 
         # Policy
         sched_decision, target_node = node_policy.schedule(f,c,event.offloaded_from)

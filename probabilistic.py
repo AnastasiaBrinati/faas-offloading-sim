@@ -638,25 +638,36 @@ class ProbabilisticPredictivePolicy(Policy):
                 if n != self.node:
                     continue
                 # prima calcola il rate rispetto agli arrivi che ci sono stati dall'ultimo update
+                # praticamente statistiche up-to-date della simulazione con statistiche snapshottate l'ultima volta dalla policy
                 new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, n))]
                 new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
-                print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
-                print(f"new_rate: {new_rate}")
+
+                print(f"most recent rate: {new_rate}")
                 print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
-                print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
-                print("^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^")
+                #print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
 
                 # formula:
-                # a = b * c + (1-b) * a
+                # actual_rate = p * new_rate + (1-p) * actual_rate
                 # praticamente in base all'arrival_rate_alpha:
                 # se è 'alto' (vicino ad uno) ti affidi di più a quello nuovo
                 # se è 'basso' (vicino a zero) ti fidi di più del vecchio valore (aggiornamento più lento)
                 self.arrival_rates[(f, c)] = self.arrival_rate_alpha * new_rate + \
                                              (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
 
+                print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
+
                 """
                 prediction = predict_arrival_rate(f)
                 self.arrival_rates[(f, c)] = prediction * p(c)
+                
+                # opzione 1
+                p(c) = ArrivalProcess.class_probs(c)
+                
+                # opzione 2
+                # p(c) : percentuale di quanti arrivi di classe c ci sono stati dall'ultimo update
+                       = new_arrivals / 
+                       sum(stats.arrivals[(f, class, self.node)] - 
+                       self.stats_snapshot["arrivals"][repr((f, class, n))] for class in stats.arrivals.classes
                 """
 
 
