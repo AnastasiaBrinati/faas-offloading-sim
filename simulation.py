@@ -88,8 +88,6 @@ class Simulation:
         assert(len(self.classes) > 0)
 
         self.__event_counter = 0
-
-
         self.stats = Stats(self, self.functions, self.classes, self.infra)
 
         self.first_stat_print = True
@@ -112,7 +110,6 @@ class Simulation:
             for arv in arvs:
                 arv.init_rng(default_rng(child_seeds[i]), default_rng(child_seeds[i+1]), default_rng(child_seeds[i+2]))
                 i += 3
-
         self.max_neighbors = self.config.getint(conf.SEC_SIM, conf.EDGE_NEIGHBORS, fallback=3)
 
         # Other params
@@ -121,7 +118,6 @@ class Simulation:
             if node.speedup > 0:
                 for fun in self.functions:
                     self.init_time[(fun,node)] = fun.initMean/node.speedup
-
 
     def new_policy (self, configured_policy, node):
         if configured_policy == "basic":
@@ -224,8 +220,6 @@ class Simulation:
             self.resp_times_file = None
 
 
-
-
         if not self.config.getboolean(conf.SEC_SIM, conf.PLOT_RESP_TIMES, fallback=False):
             self.resp_time_samples = {}
         else:
@@ -243,11 +237,9 @@ class Simulation:
         # Initialize state placement
         stateful.init_key_placement (self.functions, self.infra, self.keys_rng)
 
-        # --------------------------------------------------------------------------------------
         if self.policy_update_interval > 0.0:
             # Heap-push dell'evento di update della policy
             self.schedule(self.policy_update_interval, PolicyUpdate())
-        # --------------------------------------------------------------------------------------
         if self.rate_update_interval > 0.0:
             self.schedule(self.rate_update_interval, ArrivalRateUpdate())
         if self.stats_print_interval > 0.0:
@@ -257,11 +249,8 @@ class Simulation:
                 self.stats_file = open(stats_print_filename, "w")
 
         while len(self.events) > 0:
-            # --------------------------------------------------------------------------------------
             # Heap-pop di un evento, il primo dovrebbe essere un arrivo
             t,e = heappop(self.events)
-            # --------------------------------------------------------------------------------------
-            # Gestione dell'evento appena estratto
             self.handle(t, e)
 
         if self.stats_print_interval > 0:
@@ -270,7 +259,7 @@ class Simulation:
             if self.stats_file != sys.stdout:
                 self.stats_file.close()
                 # --------------------------------------------------------------------------------------
-                #self.stats.print(sys.stdout)
+                self.stats.print(sys.stdout)
         elif self.config.getboolean(conf.SEC_SIM, conf.PRINT_FINAL_STATS, fallback=True):
             self.stats.print(sys.stdout)
         else:
@@ -301,15 +290,12 @@ class Simulation:
         self.stats.data_migrated_bytes += moved_bytes
     
     def __schedule_next_arrival(self, node, arrival_proc):
-        print("schedule arrival")
         if not self.external_arrivals_allowed:
             return
 
         iat = arrival_proc.next_iat()
         f = arrival_proc.function
-        print(f"next func: {f}")
         c = arrival_proc.next_class()
-        print(f"next class: {c}")
 
         if iat >= 0.0 and self.t + iat < self.close_the_door_time:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
@@ -329,7 +315,6 @@ class Simulation:
                    or isinstance(item[1], StatPrinter):
                     item[1].canceled = True
             self.external_arrivals_allowed = False
-
 
     def schedule (self, t, event):
         heappush(self.events, (t, event))
@@ -356,7 +341,6 @@ class Simulation:
 
         if isinstance(event, Arrival):
             # --------------------------------------------------------------------------------------
-            print("--------------------> Arrival")
             self.handle_arrival(event)
         elif isinstance(event, Completion):
             # --------------------------------------------------------------------------------------
@@ -366,8 +350,6 @@ class Simulation:
             # --------------------------------------------------------------------------------------
             # For every node and associated policy
             for n,p in self.node2policy.items():
-                print(f"************************************NODO: {n}************************************")
-                print(f"Updating Policy: [{p}]")
                 upd_t0 = time.time()
                 # Update the policy
                 p.update()
@@ -458,7 +440,6 @@ class Simulation:
         if self.external_arrivals_allowed:
             self.schedule(self.t + self.expiration_timeout, CheckExpiredContainers(n)) 
 
-
     def do_offload (self, arrival, target_node):
         latency = self.infra.get_latency(arrival.node, target_node)
         transfer_time = arrival.function.inputSizeMean*8/1000/1000/self.infra.get_bandwidth(arrival.node, target_node)
@@ -477,14 +458,12 @@ class Simulation:
         arv_proc = event.arrival_proc
         f = event.function
         c = event.qos_class
-        print(f"we are on: {event.node}")
-        print(f"handling most imminent arrival event [{f}] of class [{c}]")
         self.stats.arrivals[(f,c,n)] += 1
         if external:
-            print(f"external, arrival from trace: {arv_proc}")
+            #print(f"[{n}]  EXTERNAL arrival [{f}] of class [{c}], from: {arv_proc}")
             self.stats.ext_arrivals[(f,c,n)] += 1
-        else:
-            print(f"not external, offloaded from: {event.offloaded_from}")
+        #else:
+        #    print(f"[{n}] NOT external arrival [{f}], offloaded from: {event.offloaded_from}")
 
         # Policy
         sched_decision, target_node = node_policy.schedule(f,c,event.offloaded_from)

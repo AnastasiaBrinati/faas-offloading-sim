@@ -370,7 +370,6 @@ class ProbabilisticPolicy (Policy):
             raise RuntimeError(f"Unknown optimizer: {optimizer_to_use}")
         return opt
 
-
 class ProbabilisticPredictivePolicy(Policy):
 
     # Probability vector: p_L, p_C, p_E, p_D
@@ -417,7 +416,7 @@ class ProbabilisticPredictivePolicy(Policy):
         self.curr_local_reqs = 0
         self.local_usable_memory_coeff = 1.0
         # --------------------------------------------------------------------------------------
-        print("inizializzo arrival rates")
+        #print("inizializzo arrival rates")
         self.arrival_rates = {}
         # --------------------------------------------------------------------------------------
         self.estimated_service_time = {}
@@ -490,9 +489,7 @@ class ProbabilisticPredictivePolicy(Policy):
         return (decision, None)
 
     def update(self):
-        print(f"self.arrival_rates prima di update metrics {self.arrival_rates}")
         self.update_metrics()
-        print(f"self.arrival_rates dopo di update metrics {self.arrival_rates}")
 
         # -------------------------------------------------------------------------------------- <- CAPISCI BENE QUA
         arrivals = sum(
@@ -547,7 +544,6 @@ class ProbabilisticPredictivePolicy(Policy):
                 self.cold_start_prob_local[f] = 0
 
         # CLOUD
-        #
         if self.cloud_cold_start_estimation == ColdStartEstimation.PACS:
             for f in self.simulation.functions:
                 total_arrival_rate = max(0.001, \
@@ -613,68 +609,64 @@ class ProbabilisticPredictivePolicy(Policy):
         self.estimated_service_time_cloud = {}
 
         for f in self.simulation.functions:
-            # If there is at least one function to be executed on a node:
+            # If at least one function was executed on this node:
             if stats.node2completions[(f, self.node)] > 0:
-            # -------------------------------------------------------------------------------
-                print(f"There are {stats.node2completions[(f, self.node)]} functions {f}")
                 # Estimate the service time
                 self.estimated_service_time[f] = (stats.execution_time_sum[(f, self.node)] /
                                                   stats.node2completions[(f, self.node)])
             # otherwise
             else:
-                print(f"There are 0 functions {f}")
                 self.estimated_service_time[f] = 0.1
-            # -------------------------------------------------------------------------------
+
+            # If at least one function was executed on this (cloud)-node:
             if stats.node2completions[(f, self.cloud)] > 0:
                 self.estimated_service_time_cloud[f] = stats.execution_time_sum[(f, self.cloud)] / \
                                                        stats.node2completions[(f, self.cloud)]
+            # otherwise
             else:
                 self.estimated_service_time_cloud[f] = 0.1
 
         if self.stats_snapshot is not None:
-            #   arrival_rates = {}
             # ricordati che stats = self.simulation.stats
             for f, c, n in stats.arrivals:
                 if n != self.node:
                     continue
+
                 # prima calcola il rate rispetto agli arrivi che ci sono stati dall'ultimo update
                 # praticamente statistiche up-to-date della simulazione con statistiche snapshottate l'ultima volta dalla policy
                 new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, n))]
                 new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
-
-                print(f"most recent rate: {new_rate}")
-                print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
+                #print(f"most recent rate: {new_rate}")
+                #print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
                 #print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
 
-                # formula:
-                # actual_rate = p * new_rate + (1-p) * actual_rate
-                # praticamente in base all'arrival_rate_alpha:
-                # se è 'alto' (vicino ad uno) ti affidi di più a quello nuovo
-                # se è 'basso' (vicino a zero) ti fidi di più del vecchio valore (aggiornamento più lento)
-                self.arrival_rates[(f, c)] = self.arrival_rate_alpha * new_rate + \
-                                             (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
+                # Only check for the actual trace arrivals
+                if n in self.simulation.node2arrivals:
+                    for arv in self.simulation.node2arrivals[n]:
+                        # Only focus on actual arrival function
+                        if f != arv.function:
+                            continue
 
-                print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
+                        # Only focus on actual arrival class
+                        if c not in arv.classes:
+                            continue
 
-                """
-                prediction = predict_arrival_rate(f)
-                self.arrival_rates[(f, c)] = prediction * p(c)
-                
-                # opzione 1
-                p(c) = ArrivalProcess.class_probs(c)
-                
-                # opzione 2
-                # p(c) : percentuale di quanti arrivi di classe c ci sono stati dall'ultimo update
-                       = new_arrivals / 
-                       sum(stats.arrivals[(f, class, self.node)] - 
-                       self.stats_snapshot["arrivals"][repr((f, class, n))] for class in stats.arrivals.classes
-                """
+                        # get class probabilities
+                        idx_c = arv.classes.index(c)
+                        p = arv.class_probs[idx_c]
 
-
+                        if p != 0.0:
+                            #print("----------------- inizio aggiornamento ------------------------")
+                            #print(f"[   n: {n},  f: {f}, c: {c}  ]")
+                            #print(f"new_arrivals: {new_arrivals}")
+                            prediction = arv.model.predict(new_rate)
+                            self.arrival_rates[(f, c)] = prediction * p
+                            #print(f"self.arrival_rates[(f, c)]: { self.arrival_rates[(f, c)]}")
+                            #print("---------------------------------------------------------------")
 
         # nell'else ci si entra praticamente solo al primissimo giro
         else:
-            print("self.stats_snapshot is None")
+            print("self.stats_snapshot is None -> inizializzo arrival rates")
             for f, c, n in stats.arrivals:
                 if n != self.node:
                     continue
@@ -800,7 +792,6 @@ class ProbabilisticPredictivePolicy(Policy):
 
         if new_probs is not None:
             self.probs = new_probs
-            # print(f"[{self.node}] Probs: {self.probs}")
 
     def get_optimizer(self):
         optimizer_to_use = self.simulation.config.get(conf.SEC_POLICY, conf.QOS_OPTIMIZER, fallback="")

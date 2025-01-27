@@ -1,8 +1,10 @@
 from faas import Function, QoSClass
+from model import Model
 
 import numpy as np
 import numpy.matlib as ml
 from map import SamplesFromMAP, MapMean
+
 
 class ArrivalProcess:
 
@@ -41,7 +43,6 @@ class ArrivalProcess:
         for c,p in zip(self.classes, self.class_probs):
             d[c] = self.get_mean_rate()*p
         return d
-
 
 class PoissonArrivalProcess (ArrivalProcess):
 
@@ -84,11 +85,10 @@ class DeterministicArrivalProcess (PoissonArrivalProcess):
     def get_mean_rate(self):
         return self.rate
 
-
 class TraceArrivalProcess (ArrivalProcess):
 
     def __init__ (self, function: Function, classes: [QoSClass], trace: str):
-        super().__init__(function, classes) 
+        super().__init__(function, classes)
         self.trace = open(trace, "r")
 
     def next_iat (self):
@@ -98,6 +98,26 @@ class TraceArrivalProcess (ArrivalProcess):
             return -1.0
 
     def close(self):
+        super().close()
+        self.trace.close()
+
+class PredictiveTraceArrivalProcess (ArrivalProcess):
+
+    def __init__ (self, function: Function, classes: [QoSClass], trace: str, model: Model):
+        super().__init__(function, classes)
+        self.trace = open(trace, "r")
+        self.model = model
+
+    def next_iat (self):
+        try:
+            return float(self.trace.readline().strip())
+        except:
+            return -1.0
+
+    def close(self):
+        # before closing the trace arrival process
+        # save the error_sequence
+        print(f"avg error for trace {self.model.name}: {sum(x for x in self.model.error_sequence)/len(self.model.error_sequence)}")
         super().close()
         self.trace.close()
 

@@ -4,9 +4,10 @@ import numpy as np
 import yaml
 
 import faas
+import model
 import conf
 import stateful
-from arrivals import PoissonArrivalProcess, TraceArrivalProcess, MAPArrivalProcess
+from arrivals import PoissonArrivalProcess, PredictiveTraceArrivalProcess, MAPArrivalProcess, TraceArrivalProcess
 from numpy.random import SeedSequence, default_rng
 from simulation import Simulation
 from infrastructure import *
@@ -86,8 +87,10 @@ def read_spec_file (spec_file_name, infra, config):
                 invoking_classes = classes
             else:
                 invoking_classes = [classname2class[qcname] for qcname in f["classes"]]
-
-            if "trace" in f:
+            if "model" in f and "trace" in f:
+                m = model.Model(name=f["model"])
+                arv = PredictiveTraceArrivalProcess(fun, invoking_classes, f["trace"], m)
+            elif "trace" in f and not "model" in f:
                 arv = TraceArrivalProcess(fun, invoking_classes, f["trace"])
             elif "rate" in f:
                 dynamic_rate_coeff = float(f["dynamic_coeff"]) if "dynamic_coeff" in f else 0.0
@@ -148,8 +151,8 @@ def main():
     config_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_FILE
     config = conf.parse_config_file(config_file)
     simulation = init_simulation(config)
-    final_stats = simulation.run()
-
+    #final_stats = simulation.run()
+    stats = simulation.run()
 
 
 if __name__ == "__main__":
