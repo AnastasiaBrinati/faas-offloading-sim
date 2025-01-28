@@ -581,8 +581,6 @@ class ProbabilisticPredictivePolicy(Policy):
 
     def update_metrics(self):
         stats = self.simulation.stats
-        # simulation stats: Stats(self, self.functions, self.classes, self.infra)
-        #print(stats.node2completions)
 
         if ADAPTIVE_EDGE_MEMORY_COEFFICIENT and self.stats_snapshot is not None:
             # Reduce exposed memory if offloaded have been dropped
@@ -627,42 +625,34 @@ class ProbabilisticPredictivePolicy(Policy):
                 self.estimated_service_time_cloud[f] = 0.1
 
         if self.stats_snapshot is not None:
-            # ricordati che stats = self.simulation.stats
-            for f, c, n in stats.arrivals:
-                if n != self.node:
-                    continue
 
-                # prima calcola il rate rispetto agli arrivi che ci sono stati dall'ultimo update
-                # praticamente statistiche up-to-date della simulazione con statistiche snapshottate l'ultima volta dalla policy
-                new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, n))]
-                new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
-                #print(f"most recent rate: {new_rate}")
-                #print(f"self.arrival_rates[({f}, {c})]: {self.arrival_rates[(f, c)]}")
-                #print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
+            # Only check nodes with trace arrivals
+            if self.node in self.simulation.node2arrivals:
+                # only compute rate if there is a trace
+                new_arrivals = {}
+                total_new_arrivals = 0
+                for f in self.simulation.functions:
+                    new_arrivals[f] = 0
+                    for c in self.simulation.classes:
+                        new_arrivals[f] += stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][
+                            repr((f, c, self.node))]
+                    total_new_arrivals += new_arrivals[f]
 
-                # Only check for the actual trace arrivals
-                if n in self.simulation.node2arrivals:
-                    for arv in self.simulation.node2arrivals[n]:
-                        # Only focus on actual arrival function
-                        if f != arv.function:
-                            continue
+                new_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
 
-                        # Only focus on actual arrival class
-                        if c not in arv.classes:
-                            continue
-
-                        # get class probabilities
-                        idx_c = arv.classes.index(c)
-                        p = arv.class_probs[idx_c]
-
-                        if p != 0.0:
-                            #print("----------------- inizio aggiornamento ------------------------")
-                            #print(f"[   n: {n},  f: {f}, c: {c}  ]")
-                            #print(f"new_arrivals: {new_arrivals}")
-                            prediction = arv.model.predict(new_rate)
-                            self.arrival_rates[(f, c)] = prediction * p
-                            #print(f"self.arrival_rates[(f, c)]: { self.arrival_rates[(f, c)]}")
-                            #print("---------------------------------------------------------------")
+                predicted_rate = self.node.model.predict(new_rate)
+                # look at the arrival processes
+                for arv in self.simulation.node2arrivals[self.node]:
+                    # each arrival process has its own function
+                    if total_new_arrivals > 0:
+                        # get the % of that type of functions compared to the total (e.g. f1 / f1+f2)
+                        func_p = new_arrivals[arv.function] / total_new_arrivals
+                        for c in arv.classes:
+                            # get class probabilities
+                            idx_c = arv.classes.index(c)
+                            class_p = arv.class_probs[idx_c]
+                            if class_p != 0.0:
+                                self.arrival_rates[(arv.function, c)] = predicted_rate * func_p * class_p
 
         # nell'else ci si entra praticamente solo al primissimo giro
         else:

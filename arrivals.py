@@ -101,6 +101,7 @@ class TraceArrivalProcess (ArrivalProcess):
         super().close()
         self.trace.close()
 
+"""
 class PredictiveTraceArrivalProcess (ArrivalProcess):
 
     def __init__ (self, function: Function, classes: [QoSClass], trace: str, model: Model):
@@ -120,6 +121,7 @@ class PredictiveTraceArrivalProcess (ArrivalProcess):
         print(f"avg error for trace {self.model.name}: {sum(x for x in self.model.error_sequence)/len(self.model.error_sequence)}")
         super().close()
         self.trace.close()
+"""
 
 class MAPArrivalProcess (ArrivalProcess):
 

@@ -4,10 +4,9 @@ import numpy as np
 import yaml
 
 import faas
-import model
 import conf
 import stateful
-from arrivals import PoissonArrivalProcess, PredictiveTraceArrivalProcess, MAPArrivalProcess, TraceArrivalProcess
+from arrivals import PoissonArrivalProcess, MAPArrivalProcess, TraceArrivalProcess
 from numpy.random import SeedSequence, default_rng
 from simulation import Simulation
 from infrastructure import *
@@ -48,9 +47,14 @@ def read_spec_file (spec_file_name, infra, config):
             speedup = n["speedup"] if "speedup" in n else 1.0
             cost = n["cost"] if "cost" in n else 0.0
             custom_policy = n["policy"] if "policy" in n else None
-            node = faas.Node(node_name, memory, speedup, reg, cost=cost,
+            model = None
+            if "model" in n:
+                model = n["model"]
+            node = faas.Node(node_name, memory, speedup, reg,
+                             cost=cost,
                              custom_sched_policy=custom_policy,
-                             peer_exposed_memory_fraction=peer_exposed_memory_fraction)
+                             peer_exposed_memory_fraction=peer_exposed_memory_fraction,
+                             model_name=model)
             node_names[node_name] = node
             infra.add_node(node, reg)
 
@@ -87,10 +91,8 @@ def read_spec_file (spec_file_name, infra, config):
                 invoking_classes = classes
             else:
                 invoking_classes = [classname2class[qcname] for qcname in f["classes"]]
-            if "model" in f and "trace" in f:
-                m = model.Model(name=f["model"])
-                arv = PredictiveTraceArrivalProcess(fun, invoking_classes, f["trace"], m)
-            elif "trace" in f and not "model" in f:
+
+            if "trace" in f:
                 arv = TraceArrivalProcess(fun, invoking_classes, f["trace"])
             elif "rate" in f:
                 dynamic_rate_coeff = float(f["dynamic_coeff"]) if "dynamic_coeff" in f else 0.0
