@@ -69,6 +69,9 @@ class Node:
         else:
             self.model = None
 
+    def get_model_error(self):
+        return sum(x for x in self.model.error_sequence)/len(self.model.error_sequence)
+
     def __repr__ (self):
         return self.name
 

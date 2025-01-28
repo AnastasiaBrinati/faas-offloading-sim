@@ -301,6 +301,8 @@ class Simulation:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
         else:
             arrival_proc.close()
+            error = node.get_model_error()
+            print(f"model error: {error}")
             self.node2arrivals[node].remove(arrival_proc)
             if len(self.node2arrivals[node]) == 0:
                 del(self.node2arrivals[node])

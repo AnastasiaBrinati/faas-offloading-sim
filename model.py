@@ -26,7 +26,7 @@ class Model:
 
         input_sequence = np.array(self.rate_sequence)
         input_sequence = input_sequence.reshape(1, self.sequence_length)
-        predicted_value = self.m.predict(input_sequence)
+        predicted_value = self.m.predict(input_sequence, verbose=0)
         return predicted_value[0][0]
 
     def __repr__ (self):
