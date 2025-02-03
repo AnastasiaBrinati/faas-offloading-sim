@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load data from CSV
-edge = "edge1_predictions"
+edge = "edge3_predictions"
 file_path = "results/predictions/"+edge+".csv"
 df = pd.read_csv(file_path)
 
@@ -19,8 +19,8 @@ plt.plot(x_values, actual, linestyle='-', color='blue', label='Actual')
 plt.plot(x_values, predicted, linestyle='--', color='red', label='Predicted')
 
 # Labels and Title
-plt.xlabel("Index")
-plt.ylabel("Value")
+plt.xlabel("Time")
+plt.ylabel("Arrival Rate")
 plt.title("Actual vs. Predicted Arrival Rates")
 plt.legend()
 plt.grid(True)

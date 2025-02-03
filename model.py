@@ -59,6 +59,11 @@ class Model:
 
     def get_error(self):
         if len(self.error_sequence) > 0:
+            # Write to CSV
+            with open("results/errors/" + self.name + "_errors.csv", 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Error"])  # Header
+                writer.writerows(zip(self.error_sequence))  # Combine lists into rows
             return sum(x for x in self.error_sequence)/len(self.error_sequence)
         else:
             return 0.0
