@@ -435,6 +435,9 @@ class ProbabilisticPredictivePolicy(Policy):
         self.edge_bw = float("inf")
         self.cold_start_prob_edge = {}
 
+        # model stats
+        self.func_errors = {}
+
         self.possible_decisions = list(SchedulerDecision)
         self.probs = {(f, c): [0.5, 0.5, 0., 0.] for f in simulation.functions for c in simulation.classes}
 
@@ -498,7 +501,6 @@ class ProbabilisticPredictivePolicy(Policy):
         if arrivals > 0.0:
             # trigger the optimizer
             self.update_probabilities()
-        # --------------------------------------------------------------------------------------
 
         self.stats_snapshot = self.simulation.stats.to_dict()
         self.last_update_time = self.simulation.t
@@ -506,6 +508,11 @@ class ProbabilisticPredictivePolicy(Policy):
         # reset counters
         self.curr_local_blocked_reqs = 0
         self.curr_local_reqs = 0
+
+    def get_function_errors(self, f):
+        if len(self.func_errors[self.node][f]) > 0:
+            e = sum(x for x in self.func_errors[self.node][f]) / len(self.func_errors[self.node][f])
+            print(f"{self.node}, model error for {f}: {e}")
 
     def estimate_cold_start_prob(self, stats):
         #
@@ -638,15 +645,20 @@ class ProbabilisticPredictivePolicy(Policy):
                             repr((f, c, self.node))]
                     total_new_arrivals += new_arrivals[f]
 
-                new_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
+                actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
 
-                predicted_rate = self.node.model.predict(new_rate)
+                predicted_rate = self.node.predict(actual_rate)
+
                 # look at the arrival processes
                 for arv in self.simulation.node2arrivals[self.node]:
                     # each arrival process has its own function
                     if total_new_arrivals > 0:
                         # get the % of that type of functions compared to the total (e.g. f1 / f1+f2)
                         func_p = new_arrivals[arv.function] / total_new_arrivals
+
+                        # here we could store the error per function type
+                        self.func_errors[self.node][arv.function].append(func_p*(np.abs(predicted_rate-actual_rate)))
+
                         for c in arv.classes:
                             # get class probabilities
                             idx_c = arv.classes.index(c)
@@ -656,13 +668,15 @@ class ProbabilisticPredictivePolicy(Policy):
 
         # nell'else ci si entra praticamente solo al primissimo giro
         else:
-            print("self.stats_snapshot is None -> inizializzo arrival rates")
             for f, c, n in stats.arrivals:
                 if n != self.node:
                     continue
-                # ----------------------------------------------------------------------------------------------------- <- QUI GIU'
                 # praticamente la prima volta che un nodo ha un arrivo:
                 self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
+
+                if n not in self.func_errors.keys():
+                    self.func_errors[n] = {}
+                self.func_errors[n][f] = []
 
         self.estimate_cold_start_prob(stats)
 

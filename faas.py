@@ -1,6 +1,7 @@
 from dataclasses import dataclass,field
 from enum import Enum
 import model
+import csv
 
 class ContainerPool:
 
@@ -64,13 +65,22 @@ class Node:
         self.kv_store = {}
 
         if model_name is not None:
-            print(model_name)
             self.model = model.Model(model_name)
         else:
             self.model = None
 
-    def get_model_error(self):
-        return sum(x for x in self.model.error_sequence)/len(self.model.error_sequence)
+    def predict(self, new_rate):
+        return self.model.predict(new_rate)
+
+    def get_model_stats(self):
+        if self.model is None:
+            return 0.0
+
+        # asks the model to print stuff on file
+        self.model.get_stats(self.name)
+
+        # get error stats
+        print(f"Node {self.name} using model {self.model}, mean absolute error: {self.model.get_error()}")
 
     def __repr__ (self):
         return self.name
