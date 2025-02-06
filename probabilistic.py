@@ -4,6 +4,7 @@ from pacsltk import perfmodel
 
 import conf
 import lp_optimizer, optimizer_nonlinear
+from arrivals import TraceArrivalProcess
 from policy import Policy, SchedulerDecision, ColdStartEstimation, COLD_START_PROB_INITIAL_GUESS
 from optimization import OptProblemParams
 
@@ -632,12 +633,14 @@ class ProbabilisticPredictivePolicy(Policy):
                 self.estimated_service_time_cloud[f] = 0.1
 
         if self.stats_snapshot is not None:
-
-            # Only check nodes with trace arrivals
+            # Only check nodes with arrival processes
             if self.node in self.simulation.node2arrivals:
-                # only compute rate if there is a trace
+
+
+                # Calculate the total arrivals for that node
                 new_arrivals = {}
                 total_new_arrivals = 0
+
                 for f in self.simulation.functions:
                     new_arrivals[f] = 0
                     for c in self.simulation.classes:
@@ -645,18 +648,20 @@ class ProbabilisticPredictivePolicy(Policy):
                             repr((f, c, self.node))]
                     total_new_arrivals += new_arrivals[f]
 
-                actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
-
-                predicted_rate = self.node.predict(actual_rate)
-
-                # look at the arrival processes
+                # Only check nodes with trace arrivals, skip others
                 for arv in self.simulation.node2arrivals[self.node]:
-                    # each arrival process has its own function
+                    if not isinstance(arv, TraceArrivalProcess):
+                        continue
+
+                    actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
+                    predicted_rate = self.node.predict(actual_rate)
+
+                    # since each arrival process has its own f
                     if total_new_arrivals > 0:
-                        # get the % of that type of functions compared to the total (e.g. f1 / f1+f2)
+                        # get the % of that f compared to the total (e.g. f1 / f1+f2)
                         func_p = new_arrivals[arv.function] / total_new_arrivals
 
-                        # here we could store the error per function type
+                        # here we store the error per function
                         self.func_errors[self.node][arv.function].append(func_p*(np.abs(predicted_rate-actual_rate)))
 
                         for c in arv.classes:
@@ -674,6 +679,7 @@ class ProbabilisticPredictivePolicy(Policy):
                 # praticamente la prima volta che un nodo ha un arrivo:
                 self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
 
+                # Inizializza lista con errori per funzione
                 if n not in self.func_errors.keys():
                     self.func_errors[n] = {}
                 self.func_errors[n][f] = []
