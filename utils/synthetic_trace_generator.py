@@ -2,99 +2,124 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 import csv
+import math
+
+"""
+  1⃣ Genera un numero di arrivi seguendo una distribuzione data per ogni step temporale indicato:
+    in pratica divide il tempo in intervalli e calcola quanti eventi devono arrivare in ogni step.
+  2⃣ Distribuisce gli arrivi casualmente all'interno di ogni intervallo temporale.
+  3️⃣ calcola i tempi inter-arrivo per ottenere una serie temporale realistica.
+"""
 
 np.random.seed(123)
+DISTRIBUTION = "sinusoid"
 
-def generate_sinusoidal(ampiezza=2, frequenza=0.5, offset=1):
-    """ Genera un tempo di interarrivo sinusoidale. """
-    t = np.abs(ampiezza * np.sin(2 * np.pi * frequenza * np.random.random())) + offset
-    return t, 1/t
+PERIOD = 1800  # Periodo dell'onda sinusoidale in secondi (es. 1800 secondi = 30 minuti)
+FREQ = 2 / PERIOD * 2 * np.pi  # Frequenza della sinusoide (ciclo completo ogni PERIOD secondi)
 
-def generate_square_wave(ampiezza=2, offset=1):
-    """Generates an inter-arrival time with a square wave pattern."""
-    t = ampiezza * (1 if np.random.random() > 0.5 else -1) + offset
-    return abs(t), 1/abs(t)
-
-def generate_sawtooth_wave(ampiezza=2, periodo=10, offset=1):
-    """Generates an inter-arrival time with a sawtooth wave pattern."""
-    t = (ampiezza * (np.random.random() % periodo) / periodo) + offset
-    return t, 1/t
-
-def generate_logistic_map(r=3.8, x0=None, offset=1):
-    """Generates an inter-arrival time based on the logistic map for chaotic variations."""
-    if x0 is None:
-        x0 = np.random.random()  # Random initial condition
-    x = r * x0 * (1 - x0)  # Logistic map iteration
-    t = abs(x * 10) + offset
-    return t, 1/t
-
-def generate_gaussian_modulated(ampiezza=2, frequenza=0.5, offset=1, sigma=0.5):
-    """Generates an inter-arrival time with a sinusoidal wave modulated by Gaussian noise."""
-    t = np.abs(ampiezza * np.sin(2 * np.pi * frequenza * np.random.random()) + np.random.normal(0, sigma)) + offset
-    return t, 1/t
+TRACE_DURATION = 3 * PERIOD  # Durata totale della simulazione (3 periodi della sinusoide)
+STEP_LEN = 120  # Lunghezza di ogni step (es. 1800/30 = 60 secondi)
+STEPS = int (TRACE_DURATION / STEP_LEN) # Numero di passi temporali (es. 5400 / 60 = 90)
 
 
-def graph(x, z=[], title="Interarrivi", filename="plot.png"):
+def generate_sinusoidal(i, min_rate=5, max_rate=50):
+    return np.round(min_rate + (max_rate - min_rate) / 2 + (max_rate - min_rate) / 2 * math.sin(FREQ * STEP_LEN * i))
+
+def generate_square_wave(i, min_rate=5, max_rate=50, period=600):
+    return max_rate if (i * STEP_LEN) % (2 * period) < period else min_rate
+
+def generate_sawtooth_wave(i, min_rate=5, max_rate=50, period=600):
+    phase = (i * STEP_LEN) % period / period
+    return np.round(min_rate + (max_rate - min_rate) * phase)
+
+def generate_logistic_map(i, r=3.8, x0=0.5, min_rate=5, max_rate=50):
+    x = x0
+    for _ in range(i):
+        x = r * x * (1 - x)
+    return np.round(min_rate + (max_rate - min_rate) * x)
+
+def generate_gaussian_modulated(i, min_rate=5, max_rate=50, sigma=0.5):
+    mod = np.exp(-0.5 * ((i - STEPS / 2) / (sigma * STEPS / 2))**2)
+    return np.round(min_rate + (max_rate - min_rate) * mod)
+
+
+def graph(interarrivals, rates, file_path):
     """ Funzione per salvare l'immagine del grafico. """
 
-    print("Graphing...")
-    plt.figure(figsize=(21, 7))
-    plt.plot(range(len(x)), x, label="Interarrivals", color='b')
-    plt.plot(range(len(z)), z, label="Rates", color='g')
-    plt.xlabel("Eventi")
-    plt.ylabel("Interarrivi")
-    plt.title(f"Distribuzione: {title}")
-    plt.legend()
-    plt.grid()
-    plt.savefig(filename)
-    plt.close()
+    # Creazione del grafico con due subplot affiancati
+    fig, axs = plt.subplots(1, 2, figsize=(12, 5))
+
+    # Grafico degli interarrivi
+    axs[0].plot(interarrivals)#, bins=30, color='blue', alpha=0.7, edgecolor='black')
+    axs[0].set_xlabel("Interarrival Time (minutes)")
+    axs[0].set_ylabel("Frequency")
+    axs[0].set_title("Interarrival Times")
+    axs[0].grid(True)
+
+    # Grafico dei rates
+    axs[1].plot(np.arange(STEPS) * STEP_LEN, rates, label=f"Arrival Rate (per {STEP_LEN})", marker="o", color="r")
+    axs[1].set_xlabel("Time (minutes)")
+    axs[1].set_ylabel(f"Arrival Rate")
+    axs[1].set_title(f"*{DISTRIBUTION}* Arrival Rate Over Time")
+    axs[1].legend()
+    axs[1].grid(True)
+
+    # Mostra i grafici
+    plt.tight_layout()
+    plt.savefig(file_path)
 
 
 def main():
     """ Funzione principale che seleziona la distribuzione e simula gli eventi. """
-    if len(sys.argv) < 3:
-        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map> <close-the-door-time>")
+    if len(sys.argv) < 2:
+        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map>")
         return
 
-    distribution = sys.argv[1].lower()
-    close_the_door = float(sys.argv[2])  # Tempo massimo consentito
+    DISTRIBUTION = sys.argv[1].lower()
+    nArrivals = np.zeros(STEPS)  # Inizializza un array per gli arrivi in ogni step
 
-    # Parametri opzionali per le distribuzioni
-    total_time = 0
-    times = []
-    rates = []
-
-    while total_time <= close_the_door:
-        # Genera il tempo di interarrivo a seconda della distribuzione
-        if distribution == "sinusoid":
-            interarrivo, rate = generate_sinusoidal(ampiezza=1.7, frequenza=0.7, offset=1.0)
-        elif distribution == "square-wave":
-            interarrivo, rate = generate_square_wave(ampiezza=1.2, offset=0.5)
-        elif distribution == "sawtooth-wave":
-            interarrivo, rate = generate_sawtooth_wave(ampiezza=0.2, periodo=0.35)
-        elif distribution == "logistic-map":
-            interarrivo, rate = generate_logistic_map()
+    for i in range(STEPS):
+        # Genera la quantità di arrivi per ogni step a seconda della distribuzione
+        if DISTRIBUTION == "sinusoid":
+            nArrivals[i] = generate_sinusoidal(i)
+        elif DISTRIBUTION == "square-wave":
+            nArrivals[i] = generate_square_wave(i)
+        elif DISTRIBUTION == "sawtooth-wave":
+            nArrivals[i] = generate_sawtooth_wave(i)
+        elif DISTRIBUTION == "logistic-map":
+            nArrivals[i] = generate_logistic_map(i)
+        elif DISTRIBUTION == "gaussian-modulated":
+            nArrivals[i] = generate_gaussian_modulated(i)
         else:
             print("Distribuzione non supportata!")
             return
 
-        if total_time <= close_the_door:  # Aggiungi solo se non supera il limite
-            times.append(interarrivo)
-            rates.append(rate)
+    # Otteniamo i rates a partire dall'array di arrivi (nel nostro caso STEP_LEN=120s)
+    rates = nArrivals / STEP_LEN
 
-        total_time += interarrivo
+    total_arrivals = int(sum(nArrivals))      # Calcola il numero totale di arrivi
+    arrival_times = np.zeros(total_arrivals)  # Inizializza gli array dei tempi di arrivo
+    count = 0
+    rng = np.random.default_rng(123)
+    for i in range(STEPS):
+        t0 = STEP_LEN * i  # Inizio dell'intervallo temporale
+        t1 = t0 + STEP_LEN  # Fine dell'intervallo temporale
+        # Genera arrivi casuali dentro [t0, t1] e li ordina;
+        # praticamente genera tempi di arrivo uniformemente distribuiti in ogni step.
+        arrival_times[count:count + int(nArrivals[i])] = np.sort(rng.uniform(t0, t1, nArrivals[i].astype(int)))
+        count += int(nArrivals[i])
+    inter_arrival_times = np.diff(arrival_times)
 
     # Genera e salva grafico
-    graph(times[:300], rates[:300], distribution, f"traces/img/{distribution}_plot.png")
+    graph(inter_arrival_times, rates, f"traces/img/{DISTRIBUTION}_plot.png")
 
     # Salva interarrivi (simulation trace), seconda metà
-    with open("traces/synthetic/synthetic_"+distribution+"_arrivals.csv", 'w', newline='') as f:
+    with open("traces/synthetic/synthetic_"+DISTRIBUTION+"_arrivals.csv", 'w', newline='') as f:
         writer = csv.writer(f)
-        writer.writerow(["interarrival"])
-        writer.writerows(zip(times[(int(len(times)/2)):]))
+        writer.writerows(zip(inter_arrival_times))
 
     # Salva rates (training data), prima metà
-    with open("models/training/synthetic_" + distribution + "_rates.csv", 'w', newline='') as f:
+    with open("models/training/synthetic_" + DISTRIBUTION + "_rates.csv", 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Rate"])
         writer.writerows(zip(rates))
