@@ -318,7 +318,6 @@ class ProbabilisticPolicy (Policy):
             for f in self.simulation.functions:
                 self.cold_start_prob_edge[f] = 0
 
-
     def update_probabilities(self):
         if self.adaptive_local_memory:
             loss = self.curr_local_blocked_reqs/self.curr_local_reqs if self.curr_local_reqs > 0 else 0
@@ -511,9 +510,10 @@ class ProbabilisticPredictivePolicy(Policy):
         self.curr_local_reqs = 0
 
     def get_function_errors(self, f):
-        if len(self.func_errors[self.node][f]) > 0:
-            e = sum(x for x in self.func_errors[self.node][f]) / len(self.func_errors[self.node][f])
-            print(f"{self.node}, model error for {f}: {e}")
+        if self.node in self.func_errors:
+            if len(self.func_errors[self.node][f]) > 0:
+                e = sum(x for x in self.func_errors[self.node][f]) / len(self.func_errors[self.node][f])
+                print(f"{self.node}, model error for {f}: {e}")
 
     def estimate_cold_start_prob(self, stats):
         #
@@ -635,8 +635,6 @@ class ProbabilisticPredictivePolicy(Policy):
         if self.stats_snapshot is not None:
             # Only check nodes with arrival processes
             if self.node in self.simulation.node2arrivals:
-
-
                 # Calculate the total arrivals for that node
                 new_arrivals = {}
                 total_new_arrivals = 0
@@ -650,9 +648,6 @@ class ProbabilisticPredictivePolicy(Policy):
 
                 # Only check nodes with trace arrivals, skip others
                 for arv in self.simulation.node2arrivals[self.node]:
-                    if not isinstance(arv, TraceArrivalProcess):
-                        continue
-
                     actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
                     predicted_rate = self.node.predict(actual_rate)
 

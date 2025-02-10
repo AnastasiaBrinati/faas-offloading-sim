@@ -93,10 +93,8 @@ def read_spec_file (spec_file_name, infra, config):
                 invoking_classes = [classname2class[qcname] for qcname in f["classes"]]
 
             if "trace" in f:
-                print(f"++++++++++++++++++++++++++++++++++ {f}")
                 arv = TraceArrivalProcess(fun, invoking_classes, f["trace"])
             elif "rate" in f:
-                print(f"----------------------------------- {f}")
                 dynamic_rate_coeff = float(f["dynamic_coeff"]) if "dynamic_coeff" in f else 0.0
                 arv = PoissonArrivalProcess(fun, invoking_classes, float(f["rate"]), dynamic_rate_coeff=dynamic_rate_coeff)
             elif "map" in f:

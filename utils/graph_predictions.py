@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load data from CSV
-edge = "edge3_predictions"
+edge = "edge1_predictions"
 file_path = "results/predictions/"+edge+".csv"
 df = pd.read_csv(file_path)
 
