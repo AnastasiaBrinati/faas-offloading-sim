@@ -298,7 +298,9 @@ class Simulation:
         if iat >= 0.0 and self.t + iat < self.close_the_door_time:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
         else:
-            self.node2policy[node].get_function_errors(f)
+            # un attimo da rivedere dove andarlo ad inserire affinchè sia buono per tutte le policy:
+            #self.node2policy[node].get_function_errors(f)
+            print(f"{self.node2policy[node]}, closing proc:    {arrival_proc}")
             arrival_proc.close()
             self.node2arrivals[node].remove(arrival_proc)
             if len(self.node2arrivals[node]) == 0:

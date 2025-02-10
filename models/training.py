@@ -25,10 +25,11 @@ def load_data(file_path):
 def prepare_data(df, target_column):
 
     rates = df[target_column]
-    x = rates[(int(len(rates)/2)+20):]
-    x_train = x[(int(len(x)/4)*3):]
-    x_valid = x[:(int(len(x)/2)*3)]
-    x_test = rates[:int(len(rates)/2)+20]
+    l = int(len(rates)/500)*495
+    x = rates[:l]
+    x_train = x[:(int(len(x)/4)*3)]
+    x_valid = x[(int(len(x)/4)*3):]
+    x_test = rates[l:]
 
     train_ds = tf.keras.utils.timeseries_dataset_from_array(
         x_train.to_numpy(),
@@ -79,22 +80,22 @@ def graph(model, x_test, test_ds, distribution):
 
 
 if __name__ == "__main__":
-    distribution = "logistic-map"
+    distribution = "sawtooth-wave"
     file_path = "models/training/synthetic_"+distribution+"_rates.csv"
     target_column = "Rate"
 
     df = load_data(file_path)
     train_ds, valid_ds, x_test, test_ds = prepare_data(df, target_column)
 
-    """ okish model for sawtooth-wave  
+    """ okish model for sawtooth-wave  """
     model = tf.keras.Sequential([
         tf.keras.layers.SimpleRNN(BATCH_SIZE * 4, activation='linear', input_shape=[None, 1], return_sequences=True),
         tf.keras.layers.SimpleRNN(BATCH_SIZE, activation='linear'),
         tf.keras.layers.Dense(1)  # no activation function by default
     ])
 
-    fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.Huber())
-    """
+    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.Huber())
+
 
     """ okish model for square-wave
     model = tf.keras.Sequential([
@@ -106,15 +107,15 @@ if __name__ == "__main__":
     fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.MeanAbsoluteError())
     """
 
-    """ not-okish model for logistic-map    """
+    """ not-okish model for logistic-map   
     model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(BATCH_SIZE * 4, activation='linear', input_shape=[None, 1]),# return_sequences=True),
-        #tf.keras.layers.SimpleRNN(BATCH_SIZE * 2, activation='linear'),
+        tf.keras.layers.SimpleRNN(BATCH_SIZE * 3, activation='linear', input_shape=[None, 1], return_sequences=True),
+        tf.keras.layers.SimpleRNN(BATCH_SIZE * 2, activation='linear'),
         tf.keras.layers.Dense(1)  # no activation function by default
     ])
 
-    fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.MeanAbsoluteError())
-
+    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.MeanAbsoluteError())
+    """
 
     """ okish model for sinusoid
     model = tf.keras.Sequential([
@@ -122,9 +123,9 @@ if __name__ == "__main__":
         tf.keras.layers.SimpleRNN(BATCH_SIZE * 2, activation='linear'),
         tf.keras.layers.Dense(1)  # no activation function by default
     ])
-    fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.Huber())
+    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.Huber())
      """
-
+    print(f"MAE: {mae}")
     graph(model, x_test, test_ds, distribution)
 
     with open("models/"+distribution+"_rnn.pkl", "wb") as f:
