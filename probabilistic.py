@@ -236,7 +236,10 @@ class ProbabilisticPolicy (Policy):
                                                   stats.node2completions[(f, self.cloud)]
             else:
                 self.estimated_service_time_cloud[f] = 0.1
-        
+
+        # just for the graph purpose:
+        total_new_rate = 0
+        total_next_rate = 0
         if self.stats_snapshot is not None:
             arrival_rates = {}
             for f, c, n in stats.arrivals:
@@ -248,9 +251,13 @@ class ProbabilisticPolicy (Policy):
                                              (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
                 self.arrival_rates[(f, c)] = next_rate
 
-                # saving stats
-                self.actual_rates[self.node].append(new_rate)
-                self.predicted_rates[self.node].append(next_rate)
+                # tanto il ciclo for viene fatto praticamente su tutte le func di tutte le classi  MA di un solo nodo
+                total_new_rate += new_rate
+                total_next_rate += next_rate
+
+            # saving stats
+            self.actual_rates[self.node].append(total_new_rate)
+            self.predicted_rates[self.node].append(total_next_rate)
 
         else:
             for f, c, n in stats.arrivals:
@@ -464,17 +471,16 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
                             repr((f, c, self.node))]
                     total_new_arrivals += new_arrivals[f]
 
-                # Only check nodes with trace arrivals, skip others
-                for arv in self.simulation.node2arrivals[self.node]:
-                    actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
-                    predicted_rate = self.node.predict(actual_rate)
+                actual_rate = total_new_arrivals / (self.simulation.t - self.last_update_time)
+                predicted_rate = self.node.predict(actual_rate)
+                # saving stats
+                self.actual_rates[self.node].append(actual_rate)
+                self.predicted_rates[self.node].append(predicted_rate)
 
-                    # saving stats
-                    self.actual_rates[self.node].append(actual_rate)
-                    self.predicted_rates[self.node].append(predicted_rate)
-
-                    # since each arrival process has its own f
-                    if total_new_arrivals > 0:
+                if total_new_arrivals > 0:
+                    # Only check nodes with trace arrivals, skip others
+                    for arv in self.simulation.node2arrivals[self.node]:
+                        # since each arrival process has its own f
                         # get the % of that f compared to the total (e.g. f1 / f1+f2)
                         func_p = new_arrivals[arv.function] / total_new_arrivals
 
