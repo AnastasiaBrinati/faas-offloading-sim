@@ -298,14 +298,11 @@ class Simulation:
         if iat >= 0.0 and self.t + iat < self.close_the_door_time:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
         else:
-            # un attimo da rivedere dove andarlo ad inserire affinchè sia buono per tutte le policy:
-            #self.node2policy[node].get_function_errors(f)
-            print(f"{self.node2policy[node]}, closing proc:    {arrival_proc}")
             arrival_proc.close()
             self.node2arrivals[node].remove(arrival_proc)
             if len(self.node2arrivals[node]) == 0:
                 del(self.node2arrivals[node])
-                node.get_model_stats()
+                self.node2policy[node].get_stats()
 
         if len(self.node2arrivals) == 0:
             # Little hack: remove all expiration from the event list (we do not

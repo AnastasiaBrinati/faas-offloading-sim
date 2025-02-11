@@ -7,8 +7,8 @@ from tensorflow.keras.callbacks import EarlyStopping
 import pickle
 import matplotlib.pyplot as plt
 
-BATCH_SIZE = 32
-SEQ_LENGTH = 7
+BATCH_SIZE = 9
+SEQ_LENGTH = 9
 
 SEED = 123
 random.seed(SEED)
@@ -25,7 +25,7 @@ def load_data(file_path):
 def prepare_data(df, target_column):
 
     rates = df[target_column]
-    l = int(len(rates)/500)*499
+    l = int(len(rates)/2)
     x = rates[:l]
     x_train = x[:(int(len(x)/2))]
     x_valid = x[(int(len(x)/2)):]
@@ -58,15 +58,6 @@ def prepare_data(df, target_column):
 
     return train_ds, valid_ds, x_test, test_ds
 
-def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsoluteError(), learning_rate=0.01, epochs=10):
-    early_stopping_cb = tf.keras.callbacks.EarlyStopping(monitor="val_mae", patience=10, restore_best_weights=True)
-    opt = tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
-
-    model.compile(loss=loss, metrics=["mae"], optimizer=opt)
-    history = model.fit(train_set, validation_data=valid_set, epochs=epochs, callbacks=[early_stopping_cb])
-    valid_loss, valid_mae = model.evaluate(valid_set)
-    return valid_mae * 1e6
-
 def graph(model, x_test, test_ds, distribution):
     Y_pred = model.predict(test_ds)
     Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:])
@@ -76,11 +67,19 @@ def graph(model, x_test, test_ds, distribution):
     plt.plot(Y_pred, label="Prediction", marker="x", color="r")
     plt.legend(loc="center left")
     plt.title(f"RNN model predicting next arrival rate of a {distribution} distribution given batch_size={BATCH_SIZE} and sequence_length={SEQ_LENGTH}")
-    plt.xlabel("sampling events")
-    plt.ylabel("rate")
+    plt.xlabel("Minutes")
+    plt.ylabel("Rate (every 120s)")
     plt.grid()
     plt.savefig("models/img/"+distribution+".png")
 
+def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsoluteError(), learning_rate=0.01, epochs=10):
+    early_stopping_cb = tf.keras.callbacks.EarlyStopping(monitor="val_mae", patience=10, restore_best_weights=True)
+    opt = tf.keras.optimizers.SGD(learning_rate=learning_rate, momentum=0.9)
+
+    model.compile(loss=loss, metrics=["mae"], optimizer=opt)
+    history = model.fit(train_set, validation_data=valid_set, epochs=epochs, callbacks=[early_stopping_cb])
+    valid_loss, valid_mae = model.evaluate(valid_set)
+    return valid_mae * 1e6
 
 if __name__ == "__main__":
     distribution = "sinusoid"
@@ -90,44 +89,13 @@ if __name__ == "__main__":
     df = load_data(file_path)
     train_ds, valid_ds, x_test, test_ds = prepare_data(df, target_column)
 
-    """ okish model for sawtooth-wave  
     model = tf.keras.Sequential([
-        tf.keras.layers.LSTM(32, activation='linear', input_shape=[None, 1]),# return_sequences=True),
+        tf.keras.layers.SimpleRNN(BATCH_SIZE*9, activation='linear', input_shape=[None, 1], return_sequences=True),
+        tf.keras.layers.SimpleRNN(BATCH_SIZE*5, activation='linear', input_shape=[None, 1]),
         tf.keras.layers.Dense(1)  # Output layer
     ])
 
-    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.Huber(), learning_rate=0.01,
-                           epochs=5)
-    """
-
-    """ okish model for square-wave
-    model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(BATCH_SIZE * 2, activation='linear', input_shape=[None, 1], return_sequences=True),
-        tf.keras.layers.SimpleRNN(BATCH_SIZE, activation='linear'),
-        tf.keras.layers.Dense(1)  # no activation function by default
-    ])
-
-    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.MeanAbsoluteError())
-    """
-
-    """ not-okish model for logistic-map   
-    model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(BATCH_SIZE * 3, activation='linear', input_shape=[None, 1], return_sequences=True),
-        tf.keras.layers.SimpleRNN(BATCH_SIZE * 2, activation='linear'),
-        tf.keras.layers.Dense(1)  # no activation function by default
-    ])
-
-    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=tf.keras.losses.MeanAbsoluteError())
-    """
-
-    """ okish model for sinusoid """
-    model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(BATCH_SIZE, activation='linear', input_shape=[None, 1], return_sequences=True),
-        tf.keras.layers.SimpleRNN(BATCH_SIZE, activation='linear'),
-        tf.keras.layers.Dense(1)  # no activation function by default
-    ])
-    mae = fit_and_evaluate(model, train_ds, valid_ds, epochs=1)
-    
+    mae = fit_and_evaluate(model, train_ds, valid_ds)
 
     print(f"MAE: {mae}")
     graph(model, x_test, test_ds, distribution)

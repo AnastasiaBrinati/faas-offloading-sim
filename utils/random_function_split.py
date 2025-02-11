@@ -19,6 +19,6 @@ def cluster(data,title, n_clusters=2):
 
 
 if __name__ == "__main__":
-    title = "logistic-map"
+    title = "sinusoid"
     data = pd.read_csv("traces/synthetic/synthetic_"+title+"_arrivals.csv")
     cluster(data, title, n_clusters=2)

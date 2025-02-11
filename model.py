@@ -11,9 +11,6 @@ class Model:
         self.rate_sequence = []
         self.error_sequence = []
 
-        self.actual_rates = []
-        self.predicted_rates = [0.0]    # otherwise actuals start one step ahead
-
     def predict (self, latest_rate):
         """
 
@@ -44,18 +41,7 @@ class Model:
         input_sequence = input_sequence.reshape(1, self.sequence_length)
         predicted_value = self.m.predict(input_sequence, verbose=0)
 
-        # save stats
-        self.actual_rates.append(latest_rate)
-        self.predicted_rates.append(predicted_value[0][0])
-
         return predicted_value[0][0]
-
-    def get_stats(self, node):
-        # Write to CSV
-        with open("results/predictions/" + node + "_predictions.csv", 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Actual", "Predicted"])  # Header
-            writer.writerows(zip(self.actual_rates, self.predicted_rates[:-1]))  # Combine lists into rows
 
     def get_error(self):
         if len(self.error_sequence) > 0:

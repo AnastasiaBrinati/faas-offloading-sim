@@ -72,15 +72,11 @@ class Node:
     def predict(self, new_rate):
         return self.model.predict(new_rate)
 
-    def get_model_stats(self):
+    def get_model_error(self, policy_name):
         if self.model is None:
             return 0.0
-
-        # asks the model to print stuff on file
-        self.model.get_stats(self.name)
-
         # get error stats
-        print(f"Node {self.name} using model {self.model}, mean absolute error: {self.model.get_error()}")
+        print(f"Node {self.name} with policy {policy_name} using model {self.model}, mean absolute error: {self.model.get_error()}")
 
     def __repr__ (self):
         return self.name

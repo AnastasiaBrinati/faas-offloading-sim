@@ -14,7 +14,7 @@ import math
 np.random.seed(123)
 DISTRIBUTION = "sinusoid"
 
-PERIOD = 1800  # Periodo dell'onda sinusoidale in secondi (es. 1800 secondi = 30 minuti)
+PERIOD = 1800*4 # Periodo dell'onda sinusoidale in secondi (es. 1800 secondi = 30 minuti)
 FREQ = 2 / PERIOD * 2 * np.pi  # Frequenza della sinusoide (ciclo completo ogni PERIOD secondi)
 
 TRACE_DURATION = 3 * PERIOD  # Durata totale della simulazione (3 periodi della sinusoide)
@@ -112,6 +112,8 @@ def main():
 
     # Genera e salva grafico
     graph(inter_arrival_times, rates, f"traces/img/{DISTRIBUTION}_plot.png")
+
+    print(f"Generated {len(nArrivals)} rates.")
 
     # Salva interarrivi (simulation trace), seconda metà
     with open("traces/synthetic/synthetic_"+DISTRIBUTION+"_arrivals.csv", 'w', newline='') as f:
