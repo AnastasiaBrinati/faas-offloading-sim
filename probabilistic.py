@@ -240,24 +240,26 @@ class ProbabilisticPolicy (Policy):
         # just for the graph purpose:
         total_new_rate = 0
         total_next_rate = 0
+
         if self.stats_snapshot is not None:
-            arrival_rates = {}
-            for f, c, n in stats.arrivals:
-                if n != self.node:
-                    continue
-                new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, n))]
-                new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
-                next_rate = self.arrival_rate_alpha * new_rate + \
-                                             (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
-                self.arrival_rates[(f, c)] = next_rate
+            # Only check nodes with arrival processes
+            if self.node in self.simulation.node2arrivals:
+                for arv in self.simulation.node2arrivals[self.node]:
+                    f = arv.function
+                    for c in arv.classes:
+                        new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, self.node))]
+                        new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
+                        next_rate = self.arrival_rate_alpha * new_rate + \
+                                    (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
+                        self.arrival_rates[(f, c)] = next_rate
 
-                # tanto il ciclo for viene fatto praticamente su tutte le func di tutte le classi  MA di un solo nodo
-                total_new_rate += new_rate
-                total_next_rate += next_rate
+                        #print(f"edge: {self.node}, f: {f}, c: {c}, rate: {new_rate}")
+                        total_new_rate += new_rate
+                        total_next_rate += next_rate
 
-            # saving stats
-            self.actual_rates[self.node].append(total_new_rate)
-            self.predicted_rates[self.node].append(total_next_rate)
+                # saving stats
+                self.actual_rates[self.node].append(total_new_rate)
+                self.predicted_rates[self.node].append(total_next_rate)
 
         else:
             for f, c, n in stats.arrivals:
@@ -412,6 +414,17 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
                 e = sum(x for x in self.func_errors[self.node][f]) / len(self.func_errors[self.node][f])
                 print(f"{self.node}, model error for {f}: {e}")
 
+    def get_stats(self):
+        # Write to CSV
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        with open("results/predictions/" + self.node.name + "_" + p_name + "_predictions.csv", 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Actual", "Predicted"])  # Header
+            writer.writerows(zip(self.actual_rates[self.node], self.predicted_rates[self.node][:-1]))  # Combine lists into rows
+
+        self.node.get_model_error(p_name)
+
+
     def update_metrics(self):
         stats = self.simulation.stats
 
@@ -476,7 +489,6 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
                 # saving stats
                 self.actual_rates[self.node].append(actual_rate)
                 self.predicted_rates[self.node].append(predicted_rate)
-                error = predicted_rate - actual_rate
 
                 if total_new_arrivals > 0:
                     # Only check nodes with trace arrivals, skip others

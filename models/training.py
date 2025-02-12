@@ -59,10 +59,10 @@ def prepare_data(df, target_column):
 
 def graph(model, x_test, test_ds, distribution):
     Y_pred = model.predict(test_ds)
-    Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:])
+    Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:]*120) # ho aggiunto il *120 solo epr i grafiic perchè almeno riportano i minuti
 
     fig, ax = plt.subplots(figsize=(20, 7))
-    plt.plot(x_test, label="Actual", marker=".")
+    plt.plot(x_test.index*120, x_test, label="Actual", marker=".")
     plt.plot(Y_pred, label="Prediction", marker="x", color="r")
     plt.legend(loc="center left")
     plt.title(f"RNN model predicting next arrival rate of a {distribution} distribution given batch_size={BATCH_SIZE} and sequence_length={SEQ_LENGTH}")
