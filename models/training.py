@@ -3,12 +3,12 @@ import tensorflow as tf
 import numpy as np
 import random
 from tensorflow import keras
-from tensorflow.keras.callbacks import EarlyStopping
 import pickle
 import matplotlib.pyplot as plt
+import sys
 
 BATCH_SIZE = 9
-SEQ_LENGTH = 9
+SEQ_LENGTH = 7
 
 SEED = 123
 random.seed(SEED)
@@ -20,15 +20,14 @@ def load_data(file_path):
     df = pd.read_csv(file_path)
     return df
 
-
 # Prepara i dati per l'addestramento del modello
 def prepare_data(df, target_column):
 
     rates = df[target_column]
     l = int(len(rates)/2)
     x = rates[:l]
-    x_train = x[:(int(len(x)/2))]
-    x_valid = x[(int(len(x)/2)):]
+    x_train = x[:(int(len(x)/4)*3)]
+    x_valid = x[(int(len(x)/4)*3):]
     x_test = rates[l:]
 
     print(f"len(x_train): {len(x_train)}")
@@ -81,24 +80,60 @@ def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsol
     valid_loss, valid_mae = model.evaluate(valid_set)
     return valid_mae * 1e6
 
-if __name__ == "__main__":
-    distribution = "sinusoid"
+def main():
+    if len(sys.argv) < 2:
+        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated>")
+        return
+
+    distribution = sys.argv[1].lower()
     file_path = "models/training/synthetic_"+distribution+"_rates.csv"
     target_column = "Rate"
 
     df = load_data(file_path)
     train_ds, valid_ds, x_test, test_ds = prepare_data(df, target_column)
 
+    neurons_1 = 1
+    neurons_2 = 1
+    actv = "linear"
+    loss = tf.keras.losses.MeanAbsoluteError()
+    learning_rate = 0.01
+
+    if distribution == "sinusoid":
+        neurons_1 = BATCH_SIZE*9-1
+        neurons_2 = BATCH_SIZE*2
+        loss = tf.keras.losses.Huber()
+    elif distribution == "square-wave":
+        neurons_1 = BATCH_SIZE*3
+        neurons_2 = BATCH_SIZE-3
+    elif distribution == "sawtooth-wave":
+        neurons_1 = BATCH_SIZE*6
+        neurons_2 = BATCH_SIZE*2-2
+    elif distribution == "logistic-map":
+        neurons_1 = BATCH_SIZE*5
+        neurons_2 = BATCH_SIZE*4
+        loss = tf.keras.losses.Huber()
+    elif distribution == "gaussian-modulated":
+        neurons_1 = BATCH_SIZE*3-2
+        neurons_2 = BATCH_SIZE
+        loss = tf.keras.losses.Huber()
+    else:
+         print("Distribuzione non supportata!")
+         return
+
+
     model = tf.keras.Sequential([
-        tf.keras.layers.SimpleRNN(BATCH_SIZE*9, activation='linear', input_shape=[None, 1], return_sequences=True),
-        tf.keras.layers.SimpleRNN(BATCH_SIZE*5, activation='linear', input_shape=[None, 1]),
+        tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
+        tf.keras.layers.SimpleRNN(neurons_2, activation=actv, input_shape=[None, 1]),
         tf.keras.layers.Dense(1)  # Output layer
     ])
 
-    mae = fit_and_evaluate(model, train_ds, valid_ds)
+    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=loss, learning_rate=learning_rate)
 
     print(f"MAE: {mae}")
     graph(model, x_test, test_ds, distribution)
 
     with open("models/"+distribution+"_rnn.pkl", "wb") as f:
         pickle.dump(model, f)
+
+if __name__ == "__main__":
+    main()

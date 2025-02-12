@@ -12,7 +12,6 @@ import math
 """
 
 np.random.seed(123)
-DISTRIBUTION = "sinusoid"
 
 PERIOD = 1800*4 # Periodo dell'onda sinusoidale in secondi (es. 1800 secondi = 30 minuti)
 FREQ = 2 / PERIOD * 2 * np.pi  # Frequenza della sinusoide (ciclo completo ogni PERIOD secondi)
@@ -43,7 +42,7 @@ def generate_gaussian_modulated(i, min_rate=5, max_rate=50, sigma=0.5):
     return np.round(min_rate + (max_rate - min_rate) * mod)
 
 
-def graph(interarrivals, rates, file_path):
+def graph(interarrivals, rates, distribution, file_path):
     """ Funzione per salvare l'immagine del grafico. """
 
     # Creazione del grafico con due subplot affiancati
@@ -60,7 +59,7 @@ def graph(interarrivals, rates, file_path):
     axs[1].plot(np.arange(STEPS) * STEP_LEN, rates, label=f"Arrival Rate (per {STEP_LEN})", marker="o", color="r")
     axs[1].set_xlabel("Time (minutes)")
     axs[1].set_ylabel(f"Arrival Rate")
-    axs[1].set_title(f"*{DISTRIBUTION}* Arrival Rate Over Time")
+    axs[1].set_title(f"*{distribution}* Arrival Rate Over Time")
     axs[1].legend()
     axs[1].grid(True)
 
@@ -70,9 +69,8 @@ def graph(interarrivals, rates, file_path):
 
 
 def main():
-    """ Funzione principale che seleziona la distribuzione e simula gli eventi. """
     if len(sys.argv) < 2:
-        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map>")
+        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated>")
         return
 
     DISTRIBUTION = sys.argv[1].lower()
@@ -111,7 +109,7 @@ def main():
     inter_arrival_times = np.diff(arrival_times)
 
     # Genera e salva grafico
-    graph(inter_arrival_times, rates, f"traces/img/{DISTRIBUTION}_plot.png")
+    graph(inter_arrival_times, rates, DISTRIBUTION,f"traces/img/{DISTRIBUTION}_plot.png")
 
     print(f"Generated {len(nArrivals)} rates.")
 

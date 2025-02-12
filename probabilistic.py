@@ -476,6 +476,7 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
                 # saving stats
                 self.actual_rates[self.node].append(actual_rate)
                 self.predicted_rates[self.node].append(predicted_rate)
+                error = predicted_rate - actual_rate
 
                 if total_new_arrivals > 0:
                     # Only check nodes with trace arrivals, skip others
