@@ -73,7 +73,6 @@ class ProbabilisticPolicy (Policy):
         self.actual_rates = {}
         self.predicted_rates = {}
 
-
     def schedule(self, f, c, offloaded_from):
         probabilities = self.probs[(f, c)].copy()
         
