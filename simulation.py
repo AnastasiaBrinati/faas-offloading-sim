@@ -142,6 +142,10 @@ class Simulation:
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-predictive":
             return probabilistic.ProbabilisticPredictivePolicy(self, node)
+        elif configured_policy == "probabilistic-predictive-function":
+            return probabilistic.ProbabilisticPredictiveFunctionPolicy(self, node)
+        elif configured_policy == "probabilistic-function":
+            return probabilistic.ProbabilisticFunctionPolicy(self, node)
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-offline":
             return probabilistic.OfflineProbabilisticPolicy(self, node)
@@ -298,11 +302,11 @@ class Simulation:
         if iat >= 0.0 and self.t + iat < self.close_the_door_time:
             self.schedule(self.t + iat, Arrival(node,f,c, arrival_proc))
         else:
+            self.node2policy[node].get_stats()
             arrival_proc.close()
             self.node2arrivals[node].remove(arrival_proc)
             if len(self.node2arrivals[node]) == 0:
                 del(self.node2arrivals[node])
-                self.node2policy[node].get_stats()
 
         if len(self.node2arrivals) == 0:
             # Little hack: remove all expiration from the event list (we do not

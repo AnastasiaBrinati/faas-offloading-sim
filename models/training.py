@@ -6,9 +6,11 @@ from tensorflow import keras
 import pickle
 import matplotlib.pyplot as plt
 import sys
+from datasets import load_dataset
 
 BATCH_SIZE = 9
 SEQ_LENGTH = 7
+FREQ = "120s"
 
 SEED = 123
 random.seed(SEED)
@@ -21,10 +23,21 @@ def load_data(file_path):
     return df
 
 # Prepara i dati per l'addestramento del modello
-def prepare_data(df, target_column):
+def prepare_data(df, test_size=0.5):
 
-    rates = df[target_column]
-    l = int(len(rates)/2)
+    # ZERO FITTING
+    start_date = df.index.min()
+    end_date = df.index.max()
+    time_period = pd.date_range(start=start_date, end=end_date, freq=FREQ)
+    zero_fitted_train2 = df.copy()
+    zero_fitted_train2 = zero_fitted_train2.reindex(time_period)
+    zero_fitted_train2 = zero_fitted_train2.fillna(0)
+    #zero_fitted_train2.reset_index(inplace=True)
+    #zero_fitted_train2.rename(columns={'index': 'timestamp'}, inplace=True)
+    #zero_fitted_train2.set_index('timestamp', inplace=True)
+
+    rates = zero_fitted_train2.copy()
+    l = int(len(rates)*test_size)
     x = rates[:l]
     x_train = x[:(int(len(x)/4)*3)]
     x_valid = x[(int(len(x)/4)*3):]
@@ -59,10 +72,10 @@ def prepare_data(df, target_column):
 
 def graph(model, x_test, test_ds, distribution):
     Y_pred = model.predict(test_ds)
-    Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:]*120) # ho aggiunto il *120 solo epr i grafiic perchè almeno riportano i minuti
+    Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:]) # aggiungere *120 solo per i grafici perchè almeno riportano i minuti
 
     fig, ax = plt.subplots(figsize=(20, 7))
-    plt.plot(x_test.index*120, x_test, label="Actual", marker=".")
+    plt.plot(x_test.index, x_test, label="Actual", marker=".")      # anche qui *120
     plt.plot(Y_pred, label="Prediction", marker="x", color="r")
     plt.legend(loc="center left")
     plt.title(f"RNN model predicting next arrival rate of a {distribution} distribution given batch_size={BATCH_SIZE} and sequence_length={SEQ_LENGTH}")
@@ -82,21 +95,28 @@ def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsol
 
 def main():
     if len(sys.argv) < 2:
-        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated>")
+        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated|globus>")
         return
 
     distribution = sys.argv[1].lower()
-    file_path = "models/training/synthetic_"+distribution+"_rates.csv"
-    target_column = "Rate"
+    if distribution == "globus":
+        data = load_dataset("anastasiafrosted/endpoint0_120", download_mode="force_redownload")
+        df = pd.DataFrame(data['train'])
+        # Ensure the `timestamp` column is in datetime format
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        rates = df.set_index("timestamp")
+        rates = rates['avg_invocations_rate']
+        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.9925)
+    else:
+        file_path = "models/training/synthetic_"+distribution+"_rates.csv"
+        df = load_data(file_path)
+        rates = df["Rate"]
+        train_ds, valid_ds, x_test, test_ds = prepare_data(rates)
 
-    df = load_data(file_path)
-    train_ds, valid_ds, x_test, test_ds = prepare_data(df, target_column)
-
-    neurons_1 = 1
-    neurons_2 = 1
     actv = "linear"
     loss = tf.keras.losses.MeanAbsoluteError()
     learning_rate = 0.01
+    epochs=5
 
     if distribution == "sinusoid":
         neurons_1 = BATCH_SIZE*9-1
@@ -116,10 +136,6 @@ def main():
         neurons_1 = BATCH_SIZE*3-2
         neurons_2 = BATCH_SIZE
         loss = tf.keras.losses.Huber()
-    else:
-         print("Distribuzione non supportata!")
-         return
-
 
     model = tf.keras.Sequential([
         tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
@@ -127,7 +143,26 @@ def main():
         tf.keras.layers.Dense(1)  # Output layer
     ])
 
-    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=loss, learning_rate=learning_rate)
+    if distribution == "globus":
+        neurons = 32
+        loss = tf.keras.losses.Huber()
+        """neurons_1 = 30
+        neurons_2 = 15
+        loss = tf.keras.losses.Huber()"""
+        epochs=2
+
+        model = tf.keras.Sequential([
+            tf.keras.layers.SimpleRNN(neurons * 3, return_sequences=True, input_shape=[None, 1]),
+            tf.keras.layers.SimpleRNN(neurons * 2, return_sequences=True),
+            tf.keras.layers.SimpleRNN(neurons),
+            tf.keras.layers.Dense(1)
+        ])
+
+    else:
+         print("Distribuzione non supportata!")
+         return
+
+    mae = fit_and_evaluate(model, train_ds, valid_ds, loss=loss, learning_rate=learning_rate, epochs=epochs)
 
     print(f"MAE: {mae}")
     graph(model, x_test, test_ds, distribution)

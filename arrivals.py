@@ -1,8 +1,5 @@
 from faas import Function, QoSClass
 from model import Model
-
-import numpy as np
-import numpy.matlib as ml
 from map import SamplesFromMAP, MapMean
 
 
@@ -85,44 +82,6 @@ class DeterministicArrivalProcess (PoissonArrivalProcess):
     def get_mean_rate(self):
         return self.rate
 
-class TraceArrivalProcess (ArrivalProcess):
-
-    def __init__ (self, function: Function, classes: [QoSClass], trace: str):
-        super().__init__(function, classes)
-        self.trace = open(trace, "r")
-
-    def next_iat (self):
-        try:
-            return float(self.trace.readline().strip())
-        except:
-            return -1.0
-
-    def close(self):
-        super().close()
-        self.trace.close()
-
-"""
-class PredictiveTraceArrivalProcess (ArrivalProcess):
-
-    def __init__ (self, function: Function, classes: [QoSClass], trace: str, model: Model):
-        super().__init__(function, classes)
-        self.trace = open(trace, "r")
-        self.model = model
-
-    def next_iat (self):
-        try:
-            return float(self.trace.readline().strip())
-        except:
-            return -1.0
-
-    def close(self):
-        # before closing the trace arrival process
-        # save the error_sequence
-        print(f"avg error for trace {self.model.name}: {sum(x for x in self.model.error_sequence)/len(self.model.error_sequence)}")
-        super().close()
-        self.trace.close()
-"""
-
 class MAPArrivalProcess (ArrivalProcess):
 
     def __init__ (self, function: Function, classes: [QoSClass], D0, D1):
@@ -142,3 +101,33 @@ class MAPArrivalProcess (ArrivalProcess):
     def get_mean_rate(self):
         return 1.0/MapMean(self.D0, self.D1)
 
+class TraceArrivalProcess (ArrivalProcess):
+
+    def __init__ (self, function: Function, classes: [QoSClass], trace: str, model: Model):
+        super().__init__(function, classes)
+        self.trace = open(trace, "r")
+        if model is not None:
+            self.model = Model(model)
+        else:
+            self.model = None
+
+    def next_iat (self):
+        try:
+            return float(self.trace.readline().strip())
+        except:
+            return -1.0
+
+    def predict(self, new_rate):
+        return self.model.predict(new_rate)
+
+    def get_model_error(self, node_name, policy_name):
+        if self.model is None:
+            print("Model is: None")
+            return
+        # get error stats
+        print(f"Node {node_name}, function {self.function}, policy {policy_name}, model {self.model}, mean absolute error: {self.model.get_error()}")
+
+
+    def close(self):
+        super().close()
+        self.trace.close()

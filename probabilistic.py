@@ -22,6 +22,7 @@ class ProbabilisticPolicy (Policy):
         self.last_update_time = None
         self.arrival_rate_alpha = self.simulation.config.getfloat(conf.SEC_POLICY, conf.POLICY_ARRIVAL_RATE_ALPHA,
                                                                   fallback=1.0)
+        print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
         self.edge_enabled = simulation.config.getboolean(conf.SEC_POLICY, conf.EDGE_OFFLOADING_ENABLED, fallback="true")
         self.strict_budget_enforce = strict_budget_enforce
 
@@ -68,7 +69,6 @@ class ProbabilisticPolicy (Policy):
 
         self.possible_decisions = list(SchedulerDecision)
         self.probs = {(f, c): [0.5, 0.5, 0., 0.] for f in simulation.functions for c in simulation.classes}
-
 
         self.actual_rates = {}
         self.predicted_rates = {}
@@ -399,12 +399,119 @@ class ProbabilisticPolicy (Policy):
             writer.writerow(["Actual", "Predicted"])  # Header
             writer.writerows(zip(self.actual_rates[self.node], self.predicted_rates[self.node][:-1]))  # Combine lists into rows
 
+class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
+    def update_metrics(self):
+        stats = self.simulation.stats
+
+        if ADAPTIVE_EDGE_MEMORY_COEFFICIENT and self.stats_snapshot is not None:
+            # Reduce exposed memory if offloaded have been dropped
+            dropped_offl = sum([stats.dropped_offloaded[(f,c,self.node)] for f in self.simulation.functions for c in self.simulation.classes])
+            prev_dropped_offl = sum([self.stats_snapshot["dropped_offloaded"][repr((f,c,self.node))] for f in self.simulation.functions for c in self.simulation.classes])
+            arrivals = sum([stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, self.node))] for f in self.simulation.functions for c in self.simulation.classes])
+            ext_arrivals = sum([stats.ext_arrivals[(f, c, self.node)] - self.stats_snapshot["ext_arrivals"][repr((f, c, self.node))] for f in self.simulation.functions for c in self.simulation.classes])
+
+            loss = (dropped_offl-prev_dropped_offl)/(arrivals-ext_arrivals) if arrivals-ext_arrivals > 0 else 0
+            if loss > 0.0:
+                self.node.peer_exposed_memory_fraction = max(0.05,self.node.peer_exposed_memory_fraction*loss/2.0)
+            else:
+                self.node.peer_exposed_memory_fraction = min(self.node.peer_exposed_memory_fraction*1.1, 1.0)
+            #print(f"{self.node}: Loss: {loss} ({dropped_offl-prev_dropped_offl}): {self.node.peer_exposed_memory_fraction:.3f}")
+
+        self.estimated_service_time = {}
+        self.estimated_service_time_cloud = {}
+
+        for f in self.simulation.functions:
+            if stats.node2completions[(f, self.node)] > 0:
+                self.estimated_service_time[f] = stats.execution_time_sum[(f, self.node)] / \
+                                            stats.node2completions[(f, self.node)]
+            else:
+                self.estimated_service_time[f] = 0.1
+            if stats.node2completions[(f, self.cloud)] > 0:
+                self.estimated_service_time_cloud[f] = stats.execution_time_sum[(f, self.cloud)] / \
+                                                  stats.node2completions[(f, self.cloud)]
+            else:
+                self.estimated_service_time_cloud[f] = 0.1
+
+        if self.stats_snapshot is not None:
+            # Only check nodes with arrival processes
+            if self.node in self.simulation.node2arrivals:
+                for arv in self.simulation.node2arrivals[self.node]:
+                    f = arv.function
+                    # just for the graph purpose:
+                    total_new_rate = 0
+                    total_next_rate = 0
+                    for c in arv.classes:
+                        new_arrivals = stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, self.node))]
+                        new_rate = new_arrivals / (self.simulation.t - self.last_update_time)
+                        next_rate = self.arrival_rate_alpha * new_rate + \
+                                    (1.0 - self.arrival_rate_alpha) * self.arrival_rates[(f, c)]
+                        self.arrival_rates[(f, c)] = next_rate
+
+                        total_new_rate += new_rate
+                        total_next_rate += next_rate
+
+                    # saving stats
+                    self.actual_rates[self.node][arv.function].append(total_new_rate)
+                    self.predicted_rates[self.node][arv.function].append(total_next_rate)
+
+        else:
+            for f, c, n in stats.arrivals:
+                if n != self.node:
+                    continue
+                self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
+
+                # Inizializza lista rates
+                if n not in self.actual_rates.keys():
+                    self.actual_rates[n] = {}
+                    self.predicted_rates[n] = {}
+                self.actual_rates[n][f] = []
+                self.predicted_rates[n][f] = [0.0]  # otherwise actuals start one step ahead
+
+        self.estimate_cold_start_prob(stats)
+
+        self.cloud_rtt = 2 * self.simulation.infra.get_latency(self.node, self.cloud)
+        self.cloud_bw = self.simulation.infra.get_bandwidth(self.node, self.cloud)
+        stats = self.simulation.stats
+
+        if self.edge_enabled:
+            neighbor_probs, neighbors = self._get_edge_peers_probabilities()
+            if len(neighbors) == 0:
+                self.aggregated_edge_memory = 0
+            else:
+                self.aggregated_edge_memory = max(1,sum([x.curr_memory*x.peer_exposed_memory_fraction for x in neighbors]))
+
+            self.edge_rtt = sum([self.simulation.infra.get_latency(self.node, x)*prob for x,prob in zip(neighbors, neighbor_probs)])
+            self.edge_bw = sum([self.simulation.infra.get_bandwidth(self.node, x)*prob for x,prob in zip(neighbors, neighbor_probs)])
+
+            self.estimated_service_time_edge = {}
+            for f in self.simulation.functions:
+                inittime = 0.0
+                servtime = 0.0
+                for neighbor, prob in zip(neighbors, neighbor_probs):
+                    if stats.node2completions[(f, neighbor)] > 0:
+                        servtime += prob* stats.execution_time_sum[(f, neighbor)] / stats.node2completions[(f, neighbor)]
+                    inittime += prob*self.simulation.init_time[(f,neighbor)]
+                if servtime == 0.0:
+                    servtime = self.estimated_service_time[f]
+                self.estimated_service_time_edge[f] = servtime
+                self.init_time_edge[f] = inittime
+
+            self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
+
+    def get_stats(self):
+        # Write to CSV
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        for arv in self.simulation.node2arrivals[self.node]:
+            with open("results/predictions/" + self.node.name + "_" + arv.function.name + "_" + p_name + "_predictions.csv", 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Actual", "Predicted"])  # Header
+                writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
+            arv.get_model_error(self.node.name, p_name)
 
 class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
 
     def __init__(self, simulation, node, strict_budget_enforce=False):
         super().__init__(simulation, node)
-        # model stats
         self.func_errors = {}
 
     def get_function_errors(self, f):
@@ -422,7 +529,6 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
             writer.writerows(zip(self.actual_rates[self.node], self.predicted_rates[self.node][:-1]))  # Combine lists into rows
 
         self.node.get_model_error(p_name)
-
 
     def update_metrics(self):
         stats = self.simulation.stats
@@ -558,6 +664,140 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
 
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
 
+class ProbabilisticPredictiveFunctionPolicy(ProbabilisticPolicy) :
+
+    def __init__(self, simulation, node, strict_budget_enforce=False):
+        super().__init__(simulation, node)
+        self.func_errors = {}
+
+    def get_stats(self):
+        # Write to CSV
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        for arv in self.simulation.node2arrivals[self.node]:
+            with open("results/predictions/" + self.node.name + "_" + arv.function.name + "_" + p_name + "_predictions.csv", 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(["Actual", "Predicted"])  # Header
+                writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
+            arv.get_model_error(self.node.name, p_name)
+
+    def update_metrics(self):
+        stats = self.simulation.stats
+
+        if ADAPTIVE_EDGE_MEMORY_COEFFICIENT and self.stats_snapshot is not None:
+            # Reduce exposed memory if offloaded have been dropped
+            dropped_offl = sum([stats.dropped_offloaded[(f, c, self.node)] for f in self.simulation.functions for c in
+                                self.simulation.classes])
+            prev_dropped_offl = sum(
+                [self.stats_snapshot["dropped_offloaded"][repr((f, c, self.node))] for f in self.simulation.functions
+                 for c in self.simulation.classes])
+            arrivals = sum(
+                [stats.arrivals[(f, c, self.node)] - self.stats_snapshot["arrivals"][repr((f, c, self.node))] for f in
+                 self.simulation.functions for c in self.simulation.classes])
+            ext_arrivals = sum(
+                [stats.ext_arrivals[(f, c, self.node)] - self.stats_snapshot["ext_arrivals"][repr((f, c, self.node))]
+                 for f in self.simulation.functions for c in self.simulation.classes])
+
+            loss = (dropped_offl - prev_dropped_offl) / (arrivals - ext_arrivals) if arrivals - ext_arrivals > 0 else 0
+            if loss > 0.0:
+                self.node.peer_exposed_memory_fraction = max(0.05, self.node.peer_exposed_memory_fraction * loss / 2.0)
+            else:
+                self.node.peer_exposed_memory_fraction = min(self.node.peer_exposed_memory_fraction * 1.1, 1.0)
+            # print(f"{self.node}: Loss: {loss} ({dropped_offl-prev_dropped_offl}): {self.node.peer_exposed_memory_fraction:.3f}")
+
+        self.estimated_service_time = {}
+        self.estimated_service_time_cloud = {}
+
+        for f in self.simulation.functions:
+            # If at least one function was executed on this node:
+            if stats.node2completions[(f, self.node)] > 0:
+                # Estimate the service time
+                self.estimated_service_time[f] = (stats.execution_time_sum[(f, self.node)] /
+                                                  stats.node2completions[(f, self.node)])
+            # otherwise
+            else:
+                self.estimated_service_time[f] = 0.1
+
+            # If at least one function was executed on this (cloud)-node:
+            if stats.node2completions[(f, self.cloud)] > 0:
+                self.estimated_service_time_cloud[f] = stats.execution_time_sum[(f, self.cloud)] / \
+                                                       stats.node2completions[(f, self.cloud)]
+            # otherwise
+            else:
+                self.estimated_service_time_cloud[f] = 0.1
+
+        if self.stats_snapshot is not None:
+            # Only check nodes with arrival processes
+            if self.node in self.simulation.node2arrivals:
+                # Only check trace arrivals
+                for arv in self.simulation.node2arrivals[self.node]:
+                    new_arrivals = 0
+                    # since each arrival process has its own f with its own classes
+                    for c in arv.classes:
+                        new_arrivals += stats.arrivals[(arv.function, c, self.node)] - self.stats_snapshot["arrivals"][repr((arv.function, c, self.node))]
+                    actual_rate = new_arrivals / (self.simulation.t - self.last_update_time)
+                    predicted_rate = arv.predict(actual_rate)
+
+                    for c in arv.classes:
+                        # get class probabilities
+                        idx_c = arv.classes.index(c)
+                        class_p = arv.class_probs[idx_c]
+                        if class_p != 0.0:
+                            self.arrival_rates[(arv.function, c)] = predicted_rate * class_p
+
+                    # saving stats
+                    self.actual_rates[self.node][arv.function].append(actual_rate)
+                    self.predicted_rates[self.node][arv.function].append(predicted_rate)
+
+        # nell'else ci si entra praticamente solo al primissimo giro
+        else:
+            for f, c, n in stats.arrivals:
+                if n != self.node:
+                    continue
+                # praticamente la prima volta che un nodo ha un arrivo:
+                self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
+
+                # Inizializza lista rates
+                if n not in self.actual_rates.keys():
+                    self.actual_rates[n] = {}
+                    self.predicted_rates[n] = {}
+                self.actual_rates[n][f] = []
+                self.predicted_rates[n][f] = [0.0]  # otherwise actuals start one step ahead
+
+
+        self.estimate_cold_start_prob(stats)
+
+        self.cloud_rtt = 2 * self.simulation.infra.get_latency(self.node, self.cloud)
+        self.cloud_bw = self.simulation.infra.get_bandwidth(self.node, self.cloud)
+        stats = self.simulation.stats
+
+        if self.edge_enabled:
+            neighbor_probs, neighbors = self._get_edge_peers_probabilities()
+            if len(neighbors) == 0:
+                self.aggregated_edge_memory = 0
+            else:
+                self.aggregated_edge_memory = max(1, sum([x.curr_memory * x.peer_exposed_memory_fraction for x in
+                                                          neighbors]))
+
+            self.edge_rtt = sum(
+                [self.simulation.infra.get_latency(self.node, x) * prob for x, prob in zip(neighbors, neighbor_probs)])
+            self.edge_bw = sum([self.simulation.infra.get_bandwidth(self.node, x) * prob for x, prob in
+                                zip(neighbors, neighbor_probs)])
+
+            self.estimated_service_time_edge = {}
+            for f in self.simulation.functions:
+                inittime = 0.0
+                servtime = 0.0
+                for neighbor, prob in zip(neighbors, neighbor_probs):
+                    if stats.node2completions[(f, neighbor)] > 0:
+                        servtime += prob * stats.execution_time_sum[(f, neighbor)] / stats.node2completions[
+                            (f, neighbor)]
+                    inittime += prob * self.simulation.init_time[(f, neighbor)]
+                if servtime == 0.0:
+                    servtime = self.estimated_service_time[f]
+                self.estimated_service_time_edge[f] = servtime
+                self.init_time_edge[f] = inittime
+
+            self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
 
 class OfflineProbabilisticPolicy (ProbabilisticPolicy):
     """
