@@ -422,7 +422,7 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
         p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
         for arv in self.simulation.node2arrivals[self.node]:
             for c in arv.classes:
-                if len(self.predicted_rates[self.node][arv.function]) == 1:
+                if len(self.actual_rates[self.node][arv.function]) == 1:
                     # Open the file in write mode to truncate it, write the header, then close it
                     with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
                               newline="") as file:
@@ -709,7 +709,7 @@ class PredictiveFunctionPolicy(ProbabilisticPolicy) :
         p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
         for arv in self.simulation.node2arrivals[self.node]:
             for c in arv.classes:
-                if len(self.predicted_rates[self.node][arv.function]) == 1:
+                if len(self.actual_rates[self.node][arv.function]) == 1:
                     # Open the file in write mode to truncate it, write the header, then close it
                     with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
                               newline="") as file:
