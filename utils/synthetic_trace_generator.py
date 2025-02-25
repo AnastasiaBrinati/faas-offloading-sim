@@ -22,7 +22,10 @@ STEPS = int (TRACE_DURATION / STEP_LEN) # Numero di passi temporali (es. 5400 / 
 
 
 def generate_sinusoidal(i, min_rate=5, max_rate=50):
-    return np.round(min_rate + (max_rate - min_rate) / 2 + (max_rate - min_rate) / 2 * math.sin(FREQ * STEP_LEN * i))
+    return np.round(min_rate + (max_rate - min_rate) / 2 + ( (max_rate - min_rate) / 2 ) * math.sin(FREQ * STEP_LEN * i))
+
+def generate_shifted_sinusoidal(i, min_rate=5, max_rate=50):
+    return np.round(min_rate + (max_rate - min_rate) / 2 + (max_rate - min_rate) / 2 * math.sin(FREQ * STEP_LEN * i + np.pi))
 
 def generate_square_wave(i, min_rate=5, max_rate=50, period=600):
     return max_rate if (i * STEP_LEN) % (2 * period) < period else min_rate
@@ -41,7 +44,6 @@ def generate_gaussian_modulated(i, min_rate=5, max_rate=50, sigma=0.5):
     mod = np.exp(-0.5 * ((i - STEPS / 2) / (sigma * STEPS / 2))**2)
     return np.round(min_rate + (max_rate - min_rate) * mod)
 
-
 def graph(interarrivals, rates, distribution, file_path):
     """ Funzione per salvare l'immagine del grafico. """
 
@@ -56,7 +58,7 @@ def graph(interarrivals, rates, distribution, file_path):
     axs[0].grid(True)
 
     # Grafico dei rates
-    axs[1].plot(np.arange(STEPS) * STEP_LEN, rates, label=f"Arrival Rate (per {STEP_LEN})", marker="o", color="r")
+    axs[1].plot(np.arange(STEPS) * STEP_LEN, rates, label=f"Arrival Rate (per {STEP_LEN}s)", marker="o", color="r")
     axs[1].set_xlabel("Time (minutes)")
     axs[1].set_ylabel(f"Arrival Rate")
     axs[1].set_title(f"*{distribution}* Arrival Rate Over Time")
@@ -80,8 +82,16 @@ def main():
         # Genera la quantità di arrivi per ogni step a seconda della distribuzione
         if DISTRIBUTION == "sinusoid":
             nArrivals[i] = generate_sinusoidal(i)
+        elif DISTRIBUTION == "shifted-sinusoid":
+            nArrivals[i] = generate_shifted_sinusoidal(i)
+        elif DISTRIBUTION == "bigger-sinusoid":
+            nArrivals[i] = generate_sinusoidal(i, min_rate=50, max_rate=2500)
+        elif DISTRIBUTION == "bigger-shifted-sinusoid":
+            nArrivals[i] = generate_shifted_sinusoidal(i, min_rate=50, max_rate=2500)
         elif DISTRIBUTION == "square-wave":
             nArrivals[i] = generate_square_wave(i)
+        elif DISTRIBUTION == "bigger-square-wave":
+            nArrivals[i] = generate_square_wave(i, min_rate=50, max_rate=500)
         elif DISTRIBUTION == "sawtooth-wave":
             nArrivals[i] = generate_sawtooth_wave(i)
         elif DISTRIBUTION == "logistic-map":

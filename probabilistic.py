@@ -266,9 +266,9 @@ class ProbabilisticPolicy (Policy):
                     continue
                 self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
 
-                # Inizializza rates
-                self.actual_rates[n] = []
-                self.predicted_rates[n] = [0.0]  # otherwise actuals start one step ahead
+                # Inizializza rates: actual to the first actual seen, predicted one step ahead just as filler
+                self.actual_rates[n] = [self.arrival_rates[(f, c)]]
+                self.predicted_rates[n] = [self.arrival_rates[(f, c)]]  # otherwise actuals start one step ahead
 
         self.estimate_cold_start_prob(stats)
 
@@ -340,6 +340,22 @@ class ProbabilisticPolicy (Policy):
             for f in self.simulation.functions:
                 self.cold_start_prob_edge[f] = 0
 
+    def save_probabilities(self, new_probs):
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        for arv in self.simulation.node2arrivals[self.node]:
+            for c in arv.classes:
+                if len(self.actual_rates[self.node][arv.function]) <= 0:
+                    # Open the file in write mode to truncate it, write the header, then close it
+                    with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
+                              newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(["actual", "predicted", "used", "pL",  "pC", "pE", "pD"])
+                    continue
+                with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", mode='a', newline='') as file:
+                    new_line = [self.actual_rates[self.node][-1]] + [self.predicted_rates[self.node][-2]] + [self.arrival_rates[(arv.function, c)]] + new_probs[(arv.function, c)]
+                    writer = csv.writer(file)
+                    writer.writerow(new_line)
+
     def update_probabilities(self):
         if self.adaptive_local_memory:
             loss = self.curr_local_blocked_reqs/self.curr_local_reqs if self.curr_local_reqs > 0 else 0
@@ -378,9 +394,10 @@ class ProbabilisticPolicy (Policy):
         opt = self.get_optimizer()
         new_probs = opt.update_probabilities(params, self.simulation.verbosity)
 
+        self.save_probabilities(new_probs)
+
         if new_probs is not None:
             self.probs = new_probs
-            #print(f"[{self.node}] Probs: {self.probs}")
 
     def get_optimizer (self):
         optimizer_to_use =  self.simulation.config.get(conf.SEC_POLICY, conf.QOS_OPTIMIZER, fallback="")
@@ -400,6 +417,23 @@ class ProbabilisticPolicy (Policy):
             writer.writerows(zip(self.actual_rates[self.node], self.predicted_rates[self.node][:-1]))  # Combine lists into rows
 
 class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
+
+    def save_probabilities(self, new_probs):
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        for arv in self.simulation.node2arrivals[self.node]:
+            for c in arv.classes:
+                if len(self.predicted_rates[self.node][arv.function]) == 1:
+                    # Open the file in write mode to truncate it, write the header, then close it
+                    with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
+                              newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(["actual", "predicted", "used", "pL", "pC", "pE", "pD"])
+                    continue
+                with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", mode='a', newline='') as file:
+                    new_line = [self.actual_rates[self.node][arv.function][-1]] + [self.predicted_rates[self.node][arv.function][-2]] + [self.arrival_rates[(arv.function, c)]] + new_probs[(arv.function, c)]
+                    writer = csv.writer(file)
+                    writer.writerow(new_line)
+
     def update_metrics(self):
         stats = self.simulation.stats
 
@@ -464,8 +498,9 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
                 if n not in self.actual_rates.keys():
                     self.actual_rates[n] = {}
                     self.predicted_rates[n] = {}
-                self.actual_rates[n][f] = []
-                self.predicted_rates[n][f] = [0.0]  # otherwise actuals start one step ahead
+
+                self.actual_rates[n][f] = [self.arrival_rates[(f, c)]]
+                self.predicted_rates[n][f] = [0.0, self.arrival_rates[(f, c)]]  # otherwise actuals start one step ahead
 
         self.estimate_cold_start_prob(stats)
 
@@ -508,7 +543,7 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
                 writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
             arv.get_model_error(self.node.name, p_name)
 
-class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
+class PredictivePolicy(ProbabilisticPolicy) :
 
     def __init__(self, simulation, node, strict_budget_enforce=False):
         super().__init__(simulation, node)
@@ -664,11 +699,27 @@ class ProbabilisticPredictivePolicy(ProbabilisticPolicy) :
 
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
 
-class ProbabilisticPredictiveFunctionPolicy(ProbabilisticPolicy) :
+class PredictiveFunctionPolicy(ProbabilisticPolicy) :
 
     def __init__(self, simulation, node, strict_budget_enforce=False):
         super().__init__(simulation, node)
         self.func_errors = {}
+
+    def save_probabilities(self, new_probs):
+        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
+        for arv in self.simulation.node2arrivals[self.node]:
+            for c in arv.classes:
+                if len(self.predicted_rates[self.node][arv.function]) == 1:
+                    # Open the file in write mode to truncate it, write the header, then close it
+                    with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
+                              newline="") as file:
+                        writer = csv.writer(file)
+                        writer.writerow(["actual", "predicted", "used", "pL", "pC", "pE", "pD"])
+                    continue
+                with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", mode='a', newline='') as file:
+                    new_line = [self.actual_rates[self.node][arv.function][-1]] + [self.predicted_rates[self.node][arv.function][-2]] + [self.arrival_rates[(arv.function, c)]] + new_probs[(arv.function, c)]
+                    writer = csv.writer(file)
+                    writer.writerow(new_line)
 
     def get_stats(self):
         # Write to CSV
@@ -760,8 +811,9 @@ class ProbabilisticPredictiveFunctionPolicy(ProbabilisticPolicy) :
                 if n not in self.actual_rates.keys():
                     self.actual_rates[n] = {}
                     self.predicted_rates[n] = {}
-                self.actual_rates[n][f] = []
-                self.predicted_rates[n][f] = [0.0]  # otherwise actuals start one step ahead
+
+                self.actual_rates[n][f] = [self.arrival_rates[(f, c)]]
+                self.predicted_rates[n][f] = [0.0, self.arrival_rates[(f, c)]]  # otherwise actuals start one step ahead
 
 
         self.estimate_cold_start_prob(stats)
