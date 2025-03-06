@@ -344,7 +344,7 @@ class ProbabilisticPolicy (Policy):
         p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
         for arv in self.simulation.node2arrivals[self.node]:
             for c in arv.classes:
-                if len(self.actual_rates[self.node][arv.function]) <= 0:
+                if len(self.actual_rates[self.node]) == 1:
                     # Open the file in write mode to truncate it, write the header, then close it
                     with open(f"results/probabilities/{p_name}_{self.node}_{arv.function}_{c}.csv", "w",
                               newline="") as file:
@@ -541,7 +541,6 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
                 writer = csv.writer(f)
                 writer.writerow(["Actual", "Predicted"])  # Header
                 writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
-            arv.get_model_error(self.node.name, p_name)
 
 class PredictivePolicy(ProbabilisticPolicy) :
 
@@ -556,14 +555,8 @@ class PredictivePolicy(ProbabilisticPolicy) :
                 print(f"{self.node}, model error for {f}: {e}")
 
     def get_stats(self):
-        # Write to CSV
-        p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
-        with open("results/predictions/" + self.node.name + "_" + p_name + "_predictions.csv", 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(["Actual", "Predicted"])  # Header
-            writer.writerows(zip(self.actual_rates[self.node], self.predicted_rates[self.node][:-1]))  # Combine lists into rows
-
-        self.node.get_model_error(p_name)
+        super().get_stats()
+        self.node.get_model_error()
 
     def update_metrics(self):
         stats = self.simulation.stats
@@ -661,8 +654,8 @@ class PredictivePolicy(ProbabilisticPolicy) :
                 self.func_errors[n][f] = []
 
                 # Inizializza rates
-                self.actual_rates[n] = []
-                self.predicted_rates[n] = [0.0]    # otherwise actuals start one step ahead
+                self.actual_rates[n] = [self.arrival_rates[(f, c)]]
+                self.predicted_rates[n] = [0.0, self.arrival_rates[(f, c)]]    # otherwise actuals start one step ahead
 
         self.estimate_cold_start_prob(stats)
 
@@ -729,7 +722,6 @@ class PredictiveFunctionPolicy(ProbabilisticPolicy) :
                 writer = csv.writer(f)
                 writer.writerow(["Actual", "Predicted"])  # Header
                 writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
-            arv.get_model_error(self.node.name, p_name)
 
     def update_metrics(self):
         stats = self.simulation.stats
@@ -786,7 +778,7 @@ class PredictiveFunctionPolicy(ProbabilisticPolicy) :
                     for c in arv.classes:
                         new_arrivals += stats.arrivals[(arv.function, c, self.node)] - self.stats_snapshot["arrivals"][repr((arv.function, c, self.node))]
                     actual_rate = new_arrivals / (self.simulation.t - self.last_update_time)
-                    predicted_rate = arv.predict(actual_rate)
+                    predicted_rate = arv.predict(actual_rate, self.arrival_rate_alpha)
 
                     for c in arv.classes:
                         # get class probabilities

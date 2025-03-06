@@ -117,17 +117,17 @@ class TraceArrivalProcess (ArrivalProcess):
         except:
             return -1.0
 
-    def predict(self, new_rate):
-        return self.model.predict(new_rate)
+    def predict(self, new_rate, alpha):
+        return self.model.predict(new_rate, alpha)
 
-    def get_model_error(self, node_name, policy_name):
+    def get_model_error(self):
         if self.model is None:
             print("Model is: None")
             return
         # get error stats
-        print(f"Node {node_name}, function {self.function}, policy {policy_name}, model {self.model}, mean absolute error: {self.model.get_error()}")
-
+        print(f"Function {self.function} using model {self.model}, mean absolute error: {self.model.get_error()}")
 
     def close(self):
         super().close()
         self.trace.close()
+        self.get_model_error()

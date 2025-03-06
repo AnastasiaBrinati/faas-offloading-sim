@@ -157,6 +157,7 @@ def main():
     simulation = init_simulation(config)
     #final_stats = simulation.run()
     stats = simulation.run()
+    return stats.utility, stats.cost
 
 
 if __name__ == "__main__":

@@ -88,27 +88,11 @@ def main():
         return
 
     distribution = sys.argv[1].lower()
-    if distribution == "globus":
-        data = load_dataset("anastasiafrosted/endpoint0_120", download_mode="force_redownload")
-        df = pd.DataFrame(data['train'])
-        # Ensure the `timestamp` column is in datetime format
-        df['timestamp'] = pd.to_datetime(df['timestamp'])
-        rates = df.set_index("timestamp")
-        rates = rates['avg_invocations_rate']
-        # ZERO FITTING
-        start_date = rates.index.min()
-        end_date = df.index.max()
-        time_period = pd.date_range(start=start_date, end=end_date, freq=FREQ)
-        zero_fitted_train2 = df.copy()
-        zero_fitted_train2 = zero_fitted_train2.reindex(time_period)
-        zero_fitted_train2 = zero_fitted_train2.fillna(0)
-        train_ds, valid_ds, x_test, test_ds = prepare_data(zero_fitted_train2, test_size=0.9925)
-    else:
-        file_path = "models/training/synthetic_"+distribution+"_rates.csv"
-        df = load_data(file_path)
-        rates = df["Rate"]
-        print(rates)
-        train_ds, valid_ds, x_test, test_ds = prepare_data(rates)
+
+    file_path = "models/training/"+distribution+"_rates.csv"
+    df = load_data(file_path)
+    rates = df["Rate"]
+    train_ds, valid_ds, x_test, test_ds = prepare_data(rates)
 
     actv = "linear"     # actv = 'tanh' is best suited for periodic functions
     loss = tf.keras.losses.MeanAbsoluteError()
@@ -116,24 +100,6 @@ def main():
     epochs=5
 
     if distribution == "sinusoid":
-        neurons = BATCH_SIZE*4+1
-        actv = "tanh"
-        learning_rate = 0.0006
-        epochs = 20
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "shifted-sinusoid":
-        neurons = BATCH_SIZE*4+1
-        actv = "tanh"
-        learning_rate = 0.0006
-        epochs = 20
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "bigger-sinusoid":
         neurons = BATCH_SIZE*7
         actv = "tanh"
         learning_rate = 0.0006
@@ -142,7 +108,7 @@ def main():
             tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
             tf.keras.layers.Dense(1)  # Output layer
         ])
-    elif distribution == "bigger-shifted-sinusoid":
+    elif distribution == "shifted-sinusoid":
         neurons = BATCH_SIZE*7
         actv = "tanh"
         learning_rate = 0.0005
@@ -152,16 +118,6 @@ def main():
             tf.keras.layers.Dense(1)  # Output layer
         ])
     elif distribution == "square-wave":
-        neurons_1 = BATCH_SIZE*3-2
-        neurons_2 = BATCH_SIZE-2
-        epochs = 50
-        learning_rate = 0.009
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
-            tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "bigger-square-wave":
         neurons_1 = BATCH_SIZE*3-3
         neurons_2 = BATCH_SIZE*2
         epochs = 50
@@ -173,14 +129,15 @@ def main():
             tf.keras.layers.Dense(1)  # Output layer
         ])
     elif distribution == "sawtooth-wave":
-        neurons_1 = BATCH_SIZE*6
-        neurons_2 = BATCH_SIZE*2-2
+        neurons_1 = BATCH_SIZE*8
+        learning_rate = 0.02
+        actv = "tanh"
         model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
-            tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
+            tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1]),
             tf.keras.layers.Dense(1)  # Output layer
         ])
     elif distribution == "logistic-map":
+        # to-do
         neurons_1 = BATCH_SIZE*5
         neurons_2 = BATCH_SIZE*4
         loss = tf.keras.losses.Huber()
@@ -190,6 +147,7 @@ def main():
             tf.keras.layers.Dense(1)  # Output layer
         ])
     elif distribution == "gaussian-modulated":
+        # to-do
         neurons_1 = BATCH_SIZE*3-2
         neurons_2 = BATCH_SIZE
         loss = tf.keras.losses.Huber()
@@ -198,16 +156,16 @@ def main():
             tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
             tf.keras.layers.Dense(1)  # Output layer
         ])
-    elif distribution == "globus":
-        neurons = 32
-        loss = tf.keras.losses.Huber()
-        """neurons_1 = 30
-        neurons_2 = 15
-        loss = tf.keras.losses.Huber()"""
-        epochs=2
+    elif distribution == "globus0" or distribution == "globus1":
+        #train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.20)
+        # to-do
+        neurons = 6
+        epochs=50
+        learning_rate = 0.0001
+        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.25)
 
         model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons * 3, return_sequences=True, input_shape=[None, 1]),
+            tf.keras.layers.SimpleRNN(neurons * 8, return_sequences=True, input_shape=[None, 1]),
             tf.keras.layers.SimpleRNN(neurons * 2, return_sequences=True),
             tf.keras.layers.SimpleRNN(neurons),
             tf.keras.layers.Dense(1)

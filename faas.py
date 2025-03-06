@@ -65,6 +65,7 @@ class Node:
         self.kv_store = {}
 
         if model_name is not None:
+            print(model_name)
             self.model = Model(model_name)
         else:
             self.model = None
@@ -72,12 +73,12 @@ class Node:
     def predict(self, new_rate):
         return self.model.predict(new_rate)
 
-    def get_model_error(self, policy_name):
+    def get_model_error(self):
         if self.model is None:
             print("Model is: None")
             return
         # get error stats
-        print(f"Node {self.name} with policy {policy_name} using model {self.model}, mean absolute error: {self.model.get_error()}")
+        print(f"Node {self.name} using model {self.model}, mean absolute error: {self.model.get_error()}")
 
     def __repr__ (self):
         return self.name

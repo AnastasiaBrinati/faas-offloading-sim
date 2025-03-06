@@ -264,7 +264,9 @@ class Simulation:
             if self.stats_file != sys.stdout:
                 self.stats_file.close()
                 # --------------------------------------------------------------------------------------
-                self.stats.print(sys.stdout)
+                #self.stats.print(sys.stdout)
+                print(f"cost: {self.stats.cost}")
+                print(f"utility: {self.stats.utility}")
         elif self.config.getboolean(conf.SEC_SIM, conf.PRINT_FINAL_STATS, fallback=True):
             self.stats.print(sys.stdout)
         else:

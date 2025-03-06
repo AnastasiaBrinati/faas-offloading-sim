@@ -27,14 +27,14 @@ def generate_sinusoidal(i, min_rate=5, max_rate=50):
 def generate_shifted_sinusoidal(i, min_rate=5, max_rate=50):
     return np.round(min_rate + (max_rate - min_rate) / 2 + (max_rate - min_rate) / 2 * math.sin(FREQ * STEP_LEN * i + np.pi))
 
-def generate_square_wave(i, min_rate=5, max_rate=50, period=600):
+def generate_square_wave(i, min_rate=5, max_rate=5, period=50):
     return max_rate if (i * STEP_LEN) % (2 * period) < period else min_rate
 
-def generate_sawtooth_wave(i, min_rate=5, max_rate=50, period=600):
+def generate_sawtooth_wave(i, min_rate=5, max_rate=5, period=50):
     phase = (i * STEP_LEN) % period / period
     return np.round(min_rate + (max_rate - min_rate) * phase)
 
-def generate_logistic_map(i, r=3.8, x0=0.5, min_rate=5, max_rate=50):
+def generate_logistic_map(i, r=3.8, x0=0.5, min_rate=50, max_rate=600):
     x = x0
     for _ in range(i):
         x = r * x * (1 - x)
@@ -81,19 +81,13 @@ def main():
     for i in range(STEPS):
         # Genera la quantità di arrivi per ogni step a seconda della distribuzione
         if DISTRIBUTION == "sinusoid":
-            nArrivals[i] = generate_sinusoidal(i)
-        elif DISTRIBUTION == "shifted-sinusoid":
-            nArrivals[i] = generate_shifted_sinusoidal(i)
-        elif DISTRIBUTION == "bigger-sinusoid":
             nArrivals[i] = generate_sinusoidal(i, min_rate=50, max_rate=2500)
-        elif DISTRIBUTION == "bigger-shifted-sinusoid":
+        elif DISTRIBUTION == "shifted-sinusoid":
             nArrivals[i] = generate_shifted_sinusoidal(i, min_rate=50, max_rate=2500)
         elif DISTRIBUTION == "square-wave":
-            nArrivals[i] = generate_square_wave(i)
-        elif DISTRIBUTION == "bigger-square-wave":
-            nArrivals[i] = generate_square_wave(i, min_rate=50, max_rate=500)
+            nArrivals[i] = generate_square_wave(i, min_rate=50, max_rate=2500)
         elif DISTRIBUTION == "sawtooth-wave":
-            nArrivals[i] = generate_sawtooth_wave(i)
+            nArrivals[i] = generate_sawtooth_wave(i, min_rate=50, max_rate=2500)
         elif DISTRIBUTION == "logistic-map":
             nArrivals[i] = generate_logistic_map(i)
         elif DISTRIBUTION == "gaussian-modulated":
@@ -124,12 +118,12 @@ def main():
     print(f"Generated {len(nArrivals)} rates.")
 
     # Salva interarrivi (simulation trace), seconda metà
-    with open("traces/synthetic/synthetic_"+DISTRIBUTION+"_arrivals.csv", 'w', newline='') as f:
+    with open("traces/synthetic/"+DISTRIBUTION+"_arrivals.csv", 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerows(zip(inter_arrival_times))
 
     # Salva rates (training data), prima metà
-    with open("models/training/synthetic_" + DISTRIBUTION + "_rates.csv", 'w', newline='') as f:
+    with open("models/training/" + DISTRIBUTION + "_rates.csv", 'w', newline='') as f:
         writer = csv.writer(f)
         writer.writerow(["Rate"])
         writer.writerows(zip(rates))
