@@ -22,7 +22,7 @@ class ProbabilisticPolicy (Policy):
         self.last_update_time = None
         self.arrival_rate_alpha = self.simulation.config.getfloat(conf.SEC_POLICY, conf.POLICY_ARRIVAL_RATE_ALPHA,
                                                                   fallback=1.0)
-        print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
+        #print(f"self.arrival_rate_alpha: {self.arrival_rate_alpha}")
         self.edge_enabled = simulation.config.getboolean(conf.SEC_POLICY, conf.EDGE_OFFLOADING_ENABLED, fallback="true")
         self.strict_budget_enforce = strict_budget_enforce
 

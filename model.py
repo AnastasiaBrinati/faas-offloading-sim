@@ -81,7 +81,6 @@ class Model:
         if len(self.actual_sequence) > self.training_threshold:
             self.training_rounds += 1
             if self.training_rounds == self.sequence_length:
-                print("rounds sufficient for training")
                 self.train()
                 self.training_flag = True
 
@@ -103,7 +102,6 @@ class Model:
             l = [latest_rate for i in range(self.sequence_length)]
             self.rate_sequence = l
             self.predicted_sequence.append(latest_rate)
-            self.actual_sequence.append(latest_rate)
 
         # salva errore rispetto all'ultimo rate predetto, il primo è filler:
         error = np.abs(latest_rate - self.predicted_sequence[-1])
@@ -120,10 +118,10 @@ class Model:
             predicted_value = self.m.predict(input_sequence, verbose=0)
             predicted_value = predicted_value[0][0]
         else:
-            predicted_value = alpha * latest_rate + (1.0 - alpha) * self.actual_sequence[-1]
+            predicted_value = alpha * latest_rate + (1.0 - alpha) * self.predicted_sequence[-1]
 
         self.model_predicted.append(predicted_value)
-        self.stats_predicted.append(alpha * latest_rate + (1.0 - alpha) * self.actual_sequence[-1])
+        self.stats_predicted.append(alpha * latest_rate + (1.0 - alpha) * self.predicted_sequence[-1])
 
         self.predicted_sequence.append(predicted_value)
         self.actual_sequence.append(latest_rate)
