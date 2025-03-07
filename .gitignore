@@ -5,7 +5,5 @@ spec.yml
 env/
 stats.txt
 resptimes.csv
-results/
-traces/
 .vscode/
-models/training
+models/
