@@ -9,3 +9,4 @@ results/
 traces/
 .vscode/
 models/training/
+results.csv
