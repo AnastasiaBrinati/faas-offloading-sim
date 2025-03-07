@@ -4,13 +4,15 @@ import numpy as np
 import random
 from tensorflow import keras
 import pickle
+from sklearn.preprocessing import MinMaxScaler
 import matplotlib.pyplot as plt
 import sys
 from datasets import load_dataset
 
-BATCH_SIZE = 9
+BATCH_SIZE = 8
 SEQ_LENGTH = 7
 FREQ = "120s"
+SCALER = MinMaxScaler(feature_range=(0, 1))
 
 SEED = 123
 random.seed(SEED)
@@ -27,15 +29,21 @@ def prepare_data(df, test_size=0.35):
     rates = df.copy()
     l = int(len(rates)*(1-test_size))
     x = rates[:l]
+
+    # Scaling
+    x = SCALER.fit_transform(x.to_numpy().reshape(-1, 1))
+
     x_train = x[:(int(len(x)/5)*4)]
     x_valid = x[(int(len(x)/5)*4):]
-    x_test = rates[l:]
+    test = rates[l:]
+    x_test = SCALER.transform(test.to_numpy().reshape(-1, 1))
 
     print(f"len(x_train): {len(x_train)}")
     print(f"len(x_test): {len(x_test)}")
 
+
     train_ds = tf.keras.utils.timeseries_dataset_from_array(
-        x_train.to_numpy(),
+        x_train,
         targets=x_train[SEQ_LENGTH:],
         sequence_length=SEQ_LENGTH,
         batch_size=BATCH_SIZE,
@@ -44,24 +52,25 @@ def prepare_data(df, test_size=0.35):
     )
 
     valid_ds = tf.keras.utils.timeseries_dataset_from_array(
-        x_valid.to_numpy(),
+        x_valid,
         targets=x_valid[SEQ_LENGTH:],
         sequence_length=SEQ_LENGTH,
         batch_size=BATCH_SIZE
     )
     test_ds = tf.keras.utils.timeseries_dataset_from_array(
-        x_test.to_numpy(),
+        x_test,
         targets=x_test[SEQ_LENGTH:],
         sequence_length=SEQ_LENGTH,
         batch_size=BATCH_SIZE,
         shuffle=False
     )
 
-    return train_ds, valid_ds, x_test, test_ds
+    return train_ds, valid_ds, test, test_ds
 
 def graph(model, x_test, test_ds, distribution):
-    Y_pred = model.predict(test_ds)
-    Y_pred = pd.Series(Y_pred.flatten(), index=x_test.index[SEQ_LENGTH:]) # aggiungere *120 solo per i grafici perchè almeno riportano i minuti
+    y_pred_scaled = model.predict(test_ds)
+    y_pred = SCALER.inverse_transform(y_pred_scaled)
+    Y_pred = pd.Series(y_pred.flatten(), index=x_test.index[SEQ_LENGTH:]) # aggiungere *120 solo per i grafici perchè almeno riportano i minuti
 
     fig, ax = plt.subplots(figsize=(20, 7))
     plt.plot(x_test.index, x_test, label="Actual", marker=".")      # anche qui *120
@@ -159,15 +168,13 @@ def main():
     elif distribution == "globus0" or distribution == "globus1":
         #train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.20)
         # to-do
-        neurons = 6
+        neurons = 7
         epochs=50
-        learning_rate = 0.0001
-        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.25)
+        learning_rate = 0.001
+        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.3)
 
         model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons * 8, return_sequences=True, input_shape=[None, 1]),
-            tf.keras.layers.SimpleRNN(neurons * 2, return_sequences=True),
-            tf.keras.layers.SimpleRNN(neurons),
+            tf.keras.layers.LSTM(neurons * 10, input_shape=(SEQ_LENGTH, 1)),
             tf.keras.layers.Dense(1)
         ])
     else:

@@ -113,11 +113,13 @@ class Model:
 
         model_wins = self.what_prediction()
         if self.training_flag and model_wins:
+            print("prediction wins")
             input_sequence = np.array(self.rate_sequence)
             input_sequence = input_sequence.reshape(1, self.sequence_length)
             predicted_value = self.m.predict(input_sequence, verbose=0)
             predicted_value = predicted_value[0][0]
         else:
+            print("--------- stats wins")
             predicted_value = alpha * latest_rate + (1.0 - alpha) * self.predicted_sequence[-1]
 
         self.model_predicted.append(predicted_value)

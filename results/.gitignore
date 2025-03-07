@@ -1,3 +1,7 @@
 *.pdf
 *.txt
 *.ini
+errors/
+predictions/
+probabilities/
+tables/
