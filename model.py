@@ -8,9 +8,8 @@ class Model:
 
     def __init__ (self, name, sequence_length=7, batch_size=9):
         self.name = name
-        self.epochs = 10
+        self.epochs = 100
         self.training_rounds = 0
-        self.training_flag = False
         self.learning_rate = 0.0001
         self.neurons = 6
         self.early_stopping_cb = tf.keras.callbacks.EarlyStopping(monitor="mae", patience=10, restore_best_weights=True)
@@ -18,7 +17,10 @@ class Model:
         self.loss = tf.keras.losses.MeanAbsoluteError()
 
         #self.m = joblib.load(name)
-        self.m = self.setup_model()
+        #self.m = self.setup_model()
+        self.m = None
+
+        self.training_flag = False
         self.sequence_length = sequence_length
         self.training_threshold = sequence_length
         self.batch_size = batch_size
@@ -32,17 +34,16 @@ class Model:
         self.stats_predicted = []
 
 
-    def setup_model(self):
-
-        # per ora fisso
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(self.neurons * 8, return_sequences=True, input_shape=[None, 1]),
-            tf.keras.layers.SimpleRNN(self.neurons * 2, return_sequences=True),
-            tf.keras.layers.SimpleRNN(self.neurons),
-            tf.keras.layers.Dense(1)
-        ])
-
-        return model
+    def setup_model(self, online=False):
+        if online:
+            # per ora fisso
+            model = tf.keras.Sequential([
+                tf.keras.layers.SimpleRNN(self.neurons, activation="tanh", input_shape=[None, 1]),
+                tf.keras.layers.Dense(1)  # Output layer
+            ])
+        else:
+            model = joblib.load(self.name)
+        self.m = model
 
     def train(self):
 
@@ -59,15 +60,17 @@ class Model:
         #valid_loss, valid_mae = self.m.evaluate(valid_set)
         #return valid_mae * 1e6
 
+        self.training_flag = True
         self.training_rounds = 0
 
     def what_prediction(self):
         # if model makes an error
         model_wins = 0
         stats_wins = 0
-        for i in range(1, len(self.actual_sequence)):
-            model_error = np.abs( self.model_predicted[-i] - self.actual_sequence[-i] )
-            stats_error = np.abs( self.stats_predicted[-i] - self.actual_sequence[-i] )
+        minimo = min(self.sequence_length, len(self.model_predicted))
+        for i in range(1, minimo):
+            model_error = np.abs( self.model_predicted[-i-1] - self.actual_sequence[-i] )
+            stats_error = np.abs( self.stats_predicted[-i-1] - self.actual_sequence[-i] )
             if model_error > stats_error:
                 stats_wins += 1
             else:
@@ -76,19 +79,16 @@ class Model:
         return model_wins > stats_wins
 
 
-    def predict (self, latest_rate, alpha):
-
-        if len(self.actual_sequence) > self.training_threshold:
-            self.training_rounds += 1
-            if self.training_rounds == self.sequence_length:
-                self.train()
-                self.training_flag = True
+    def predict (self, latest_rate, alpha, online=False, adaptive=False):
 
         """
-        
+
         Parameters
         ----------
         latest_rate: represents the actual rate since the last update
+        alpha: arrival_rate_alpha
+        online: flag to signal online policy behaviour
+        adaptive: flag to signal adaptive policy behaviour
 
         Returns
         -------
@@ -97,36 +97,53 @@ class Model:
                     predicted value <- [[0.7]]
 
         """
-        # se è la prima volta che viene
+
+        # solo la prima volta
         if len(self.rate_sequence) < self.sequence_length:
+            print(f"La policy è online: {online} e adaptive: {adaptive}")
             l = [latest_rate for i in range(self.sequence_length)]
             self.rate_sequence = l
             self.predicted_sequence.append(latest_rate)
+            self.stats_predicted.append(latest_rate)
+            self.model_predicted.append(latest_rate)
+
+            self.setup_model(online)
+
+        if online:
+            # waiting for some data to be available
+            if len(self.actual_sequence) > self.training_threshold:
+                self.training_rounds += 1
+                # training every 7 updates
+                if self.training_rounds == self.sequence_length:
+                    self.train()
 
         # salva errore rispetto all'ultimo rate predetto, il primo è filler:
         error = np.abs(latest_rate - self.predicted_sequence[-1])
         self.error_sequence.append(error)
 
         # start saving up arrival rates
+        self.actual_sequence.append(latest_rate)
         self.rate_sequence.append(latest_rate)
         self.rate_sequence.pop(0)
 
-        model_wins = self.what_prediction()
-        if self.training_flag and model_wins:
-            print("prediction wins")
+        predicted_value = alpha * latest_rate + (1.0 - alpha) * self.stats_predicted[-1]
+        self.stats_predicted.append(predicted_value)
+
+        if self.training_flag:
             input_sequence = np.array(self.rate_sequence)
             input_sequence = input_sequence.reshape(1, self.sequence_length)
-            predicted_value = self.m.predict(input_sequence, verbose=0)
-            predicted_value = predicted_value[0][0]
-        else:
-            print("--------- stats wins")
-            predicted_value = alpha * latest_rate + (1.0 - alpha) * self.predicted_sequence[-1]
+            model_prediction = self.m.predict(input_sequence, verbose=0)
+            model_prediction = model_prediction[0][0]
+            self.model_predicted.append(model_prediction)
 
-        self.model_predicted.append(predicted_value)
-        self.stats_predicted.append(alpha * latest_rate + (1.0 - alpha) * self.predicted_sequence[-1])
+            if adaptive:
+                model_wins = self.what_prediction()
+                if model_wins:
+                    predicted_value = model_prediction
+            else:
+                predicted_value = model_prediction
 
         self.predicted_sequence.append(predicted_value)
-        self.actual_sequence.append(latest_rate)
 
         return predicted_value
 

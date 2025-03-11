@@ -93,7 +93,7 @@ def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsol
 
 def main():
     if len(sys.argv) < 2:
-        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated|globus>")
+        print("Uso: python script.py <sinusoid|square-wave|sawtooth-wave|logistic-map|gaussian-modulated|globus|debs>")
         return
 
     distribution = sys.argv[1].lower()
@@ -168,15 +168,27 @@ def main():
     elif distribution == "globus0" or distribution == "globus1":
         #train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.20)
         # to-do
-        neurons = 7
+        neurons = 6
         epochs=50
         learning_rate = 0.001
-        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.3)
+        train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size=0.25)
 
+        # per ora fisso
         model = tf.keras.Sequential([
-            tf.keras.layers.LSTM(neurons * 10, input_shape=(SEQ_LENGTH, 1)),
+            tf.keras.layers.SimpleRNN(neurons * 8, return_sequences=True, input_shape=[None, 1]),
+            tf.keras.layers.SimpleRNN(neurons * 2, return_sequences=True),
+            tf.keras.layers.SimpleRNN(neurons),
             tf.keras.layers.Dense(1)
         ])
+    elif distribution == "debs15":
+        neurons = BATCH_SIZE*7
+        learning_rate = 0.0006
+        epochs = 5
+        model = tf.keras.Sequential([
+            tf.keras.layers.SimpleRNN(neurons, input_shape=[None, 1]),
+            tf.keras.layers.Dense(1)  # Output layer
+        ])
+
     else:
         print("Distribuzione non supportata")
         return

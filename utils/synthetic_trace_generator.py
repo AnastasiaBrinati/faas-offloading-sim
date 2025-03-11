@@ -20,7 +20,6 @@ TRACE_DURATION = 3 * PERIOD  # Durata totale della simulazione (3 periodi della 
 STEP_LEN = 120  # Lunghezza di ogni step (es. 1800/30 = 60 secondi)
 STEPS = int (TRACE_DURATION / STEP_LEN) # Numero di passi temporali (es. 5400 / 60 = 90)
 
-
 def generate_sinusoidal(i, min_rate=5, max_rate=50):
     return np.round(min_rate + (max_rate - min_rate) / 2 + ( (max_rate - min_rate) / 2 ) * math.sin(FREQ * STEP_LEN * i))
 

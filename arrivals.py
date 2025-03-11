@@ -117,8 +117,8 @@ class TraceArrivalProcess (ArrivalProcess):
         except:
             return -1.0
 
-    def predict(self, new_rate, alpha):
-        return self.model.predict(new_rate, alpha)
+    def predict(self, new_rate, alpha, online=False, adaptive=False):
+        return self.model.predict(new_rate, alpha, online, adaptive)
 
     def get_model_error(self):
         if self.model is None:

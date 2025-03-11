@@ -145,12 +145,18 @@ class Simulation:
             self.config.set(conf.SEC_POLICY, conf.MULTIPLE_OFFLOADING_ALLOWED, "false")
             return probabilistic.ProbabilisticPolicy(self, node, True)
         # --------------------------------------------------------------------------------------
+        elif configured_policy == "probabilistic-function":
+            return probabilistic.ProbabilisticFunctionPolicy(self, node)
         elif configured_policy == "predictive":
             return probabilistic.PredictivePolicy(self, node)
         elif configured_policy == "predictive-function":
             return probabilistic.PredictiveFunctionPolicy(self, node)
-        elif configured_policy == "probabilistic-function":
-            return probabilistic.ProbabilisticFunctionPolicy(self, node)
+        elif configured_policy == "online-predictive-function":
+            return probabilistic.OnlinePredictiveFunctionPolicy(self, node)
+        elif configured_policy == "adaptive-function":
+            return probabilistic.AdaptiveFunctionPolicy(self, node)
+        elif configured_policy == "online-adaptive-function":
+            return probabilistic.OnlineAdaptiveFunctionPolicy(self, node)
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-offline":
             return probabilistic.OfflineProbabilisticPolicy(self, node)
@@ -265,8 +271,12 @@ class Simulation:
                 self.stats_file.close()
                 # --------------------------------------------------------------------------------------
                 #self.stats.print(sys.stdout)
+                with open("results/stats/"+self.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")\
+                          +"_"+str(self.functions[0].serviceMean)+".txt", "w") as fii:
+                    self.stats.print(fii)
                 print(f"cost: {self.stats.cost}")
                 print(f"utility: {self.stats.utility}")
+                print(f"cold_starts: {self.stats.cold_starts}")
         elif self.config.getboolean(conf.SEC_SIM, conf.PRINT_FINAL_STATS, fallback=True):
             self.stats.print(sys.stdout)
         else:

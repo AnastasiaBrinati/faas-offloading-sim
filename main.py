@@ -150,6 +150,8 @@ def init_simulation (config):
     sim = Simulation(config, seed_sequence, infra, functions, classes, node2arrivals)
     return sim
 
+
+
 def main():
     DEFAULT_CONFIG_FILE = "config.ini"
     config_file = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CONFIG_FILE
@@ -157,7 +159,7 @@ def main():
     simulation = init_simulation(config)
     #final_stats = simulation.run()
     stats = simulation.run()
-    return stats.utility, stats.cost
+    return stats.utility, stats.cost, stats.cold_starts
 
 
 if __name__ == "__main__":
