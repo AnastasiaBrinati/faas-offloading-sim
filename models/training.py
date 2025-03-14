@@ -74,7 +74,7 @@ def graph(model, x_test, test_ds, distribution):
 
     fig, ax = plt.subplots(figsize=(20, 7))
     plt.plot(x_test.index, x_test, label="Actual", marker=".")      # anche qui *120
-    plt.plot(Y_pred, label="Prediction", marker="x", color="r")
+    plt.plot(x_test.index[SEQ_LENGTH:], Y_pred, label="Prediction", marker="x", color="r")
     plt.legend(loc="center left")
     plt.title(f"RNN model predicting next arrival rate of a {distribution} distribution given batch_size={BATCH_SIZE} and sequence_length={SEQ_LENGTH}")
     plt.xlabel("Updates")
@@ -90,6 +90,13 @@ def fit_and_evaluate(model, train_set, valid_set, loss=tf.keras.losses.MeanAbsol
     history = model.fit(train_set, validation_data=valid_set, epochs=epochs, callbacks=[early_stopping_cb])
     valid_loss, valid_mae = model.evaluate(valid_set)
     return valid_mae * 1e6
+
+def split_dataframe(df, chunk_size = 10000):
+    chunks = list()
+    num_chunks = len(df) // chunk_size + 1
+    for i in range(num_chunks):
+        chunks.append(df[i*chunk_size:(i+1)*chunk_size])
+    return chunks
 
 def main():
     if len(sys.argv) < 2:
@@ -180,12 +187,12 @@ def main():
             tf.keras.layers.SimpleRNN(neurons),
             tf.keras.layers.Dense(1)
         ])
-    elif distribution == "debs15":
+    elif distribution == "debs15" or distribution == "debs15_1" or distribution == "debs15_2" or distribution == "debs15_3":
         neurons = BATCH_SIZE*7
-        learning_rate = 0.0006
-        epochs = 5
+        learning_rate = 0.0005
+        epochs = 10
         model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons, input_shape=[None, 1]),
+            tf.keras.layers.SimpleRNN(neurons*10, input_shape=[None, 1]),
             tf.keras.layers.Dense(1)  # Output layer
         ])
 

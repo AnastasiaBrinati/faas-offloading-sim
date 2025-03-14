@@ -43,6 +43,7 @@ class Model:
             ])
         else:
             model = joblib.load(self.name)
+            self.training_flag = True
         self.m = model
 
     def train(self):
@@ -114,7 +115,7 @@ class Model:
             if len(self.actual_sequence) > self.training_threshold:
                 self.training_rounds += 1
                 # training every 7 updates
-                if self.training_rounds == self.sequence_length:
+                if self.training_rounds == self.sequence_length*3:
                     self.train()
 
         # salva errore rispetto all'ultimo rate predetto, il primo è filler:
