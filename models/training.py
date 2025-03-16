@@ -29,13 +29,13 @@ def prepare_data(df, test_size=0.35):
     rates = df.copy()
     l = int(len(rates)*(1-test_size))
     x = rates[:l]
-
     # Scaling
     x = SCALER.fit_transform(x.to_numpy().reshape(-1, 1))
 
     x_train = x[:(int(len(x)/5)*4)]
     x_valid = x[(int(len(x)/5)*4):]
     test = rates[l:]
+    # Scaling
     x_test = SCALER.transform(test.to_numpy().reshape(-1, 1))
 
     print(f"len(x_train): {len(x_train)}")
@@ -108,24 +108,15 @@ def main():
     file_path = "models/training/"+distribution+"_rates.csv"
     df = load_data(file_path)
     rates = df["Rate"]
-    train_ds, valid_ds, x_test, test_ds = prepare_data(rates)
 
     actv = "linear"     # actv = 'tanh' is best suited for periodic functions
     loss = tf.keras.losses.MeanAbsoluteError()
     learning_rate = 0.01
     epochs=5
+    test_size = 0.35
 
     if distribution == "sinusoid":
-        neurons = BATCH_SIZE*7
-        actv = "tanh"
-        learning_rate = 0.0006
-        epochs = 50
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "shifted-sinusoid":
-        neurons = BATCH_SIZE*7
+        neurons = BATCH_SIZE*8
         actv = "tanh"
         learning_rate = 0.0005
         epochs = 50
@@ -133,12 +124,22 @@ def main():
             tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
             tf.keras.layers.Dense(1)  # Output layer
         ])
+    elif distribution == "shifted-sinusoid":
+        test_size = 0.38
+        neurons = BATCH_SIZE*7
+        actv = "tanh"
+        learning_rate = 0.005
+        epochs = 50
+        model = tf.keras.Sequential([
+            tf.keras.layers.SimpleRNN(neurons, activation=actv, input_shape=[None, 1]),
+            tf.keras.layers.Dense(1)  # Output layer
+        ])
     elif distribution == "square-wave":
-        neurons_1 = BATCH_SIZE*3-3
-        neurons_2 = BATCH_SIZE*2
+        neurons_1 = BATCH_SIZE*3
+        neurons_2 = BATCH_SIZE*2-1
         epochs = 50
         actv = 'tanh'
-        learning_rate = 0.01
+        learning_rate = 0.0001
         model = tf.keras.Sequential([
             tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
             tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
@@ -146,30 +147,10 @@ def main():
         ])
     elif distribution == "sawtooth-wave":
         neurons_1 = BATCH_SIZE*8
-        learning_rate = 0.02
+        learning_rate = 0.001
         actv = "tanh"
         model = tf.keras.Sequential([
             tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1]),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "logistic-map":
-        # to-do
-        neurons_1 = BATCH_SIZE*5
-        neurons_2 = BATCH_SIZE*4
-        loss = tf.keras.losses.Huber()
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
-            tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
-            tf.keras.layers.Dense(1)  # Output layer
-        ])
-    elif distribution == "gaussian-modulated":
-        # to-do
-        neurons_1 = BATCH_SIZE*3-2
-        neurons_2 = BATCH_SIZE
-        loss = tf.keras.losses.Huber()
-        model = tf.keras.Sequential([
-            tf.keras.layers.SimpleRNN(neurons_1, activation=actv, input_shape=[None, 1], return_sequences=True),
-            tf.keras.layers.SimpleRNN(neurons_2, activation=actv),
             tf.keras.layers.Dense(1)  # Output layer
         ])
     elif distribution == "globus0" or distribution == "globus1":
@@ -187,10 +168,10 @@ def main():
             tf.keras.layers.SimpleRNN(neurons),
             tf.keras.layers.Dense(1)
         ])
-    elif distribution == "debs15" or distribution == "debs15_1" or distribution == "debs15_2" or distribution == "debs15_3":
+    elif distribution == "debs15" or distribution == "debs15_1_even" or distribution == "debs15_2" or distribution == "debs15_1":
         neurons = BATCH_SIZE*7
         learning_rate = 0.0005
-        epochs = 10
+        epochs = 50
         model = tf.keras.Sequential([
             tf.keras.layers.SimpleRNN(neurons*10, input_shape=[None, 1]),
             tf.keras.layers.Dense(1)  # Output layer
@@ -200,6 +181,7 @@ def main():
         print("Distribuzione non supportata")
         return
 
+    train_ds, valid_ds, x_test, test_ds = prepare_data(rates, test_size)
     mae = fit_and_evaluate(model, train_ds, valid_ds, loss=loss, learning_rate=learning_rate, epochs=epochs)
 
     print(f"MAE: {mae}")

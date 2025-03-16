@@ -1,6 +1,7 @@
 import joblib
 import tensorflow as tf
 from tensorflow import keras
+from sklearn.preprocessing import MinMaxScaler
 import numpy as np
 import csv
 
@@ -12,18 +13,17 @@ class Model:
         self.training_rounds = 0
         self.learning_rate = 0.0001
         self.neurons = 6
+        self.batch_size = batch_size
         self.early_stopping_cb = tf.keras.callbacks.EarlyStopping(monitor="mae", patience=10, restore_best_weights=True)
         self.opt = tf.keras.optimizers.SGD(learning_rate=self.learning_rate, momentum=0.9)
         self.loss = tf.keras.losses.MeanAbsoluteError()
 
-        #self.m = joblib.load(name)
-        #self.m = self.setup_model()
         self.m = None
 
         self.training_flag = False
+        self.scaler = MinMaxScaler(feature_range=(0, 1))
         self.sequence_length = sequence_length
         self.training_threshold = sequence_length
-        self.batch_size = batch_size
         self.rate_sequence = []
         self.actual_sequence = []
         self.predicted_sequence = []
@@ -48,9 +48,9 @@ class Model:
 
     def train(self):
 
-        training_set = self.actual_sequence
+        training_set = self.scaler.fit_transform(np.array(self.actual_sequence).reshape(-1, 1))
         train_ds = tf.keras.utils.timeseries_dataset_from_array(
-            np.array(training_set),
+            training_set,
             targets=training_set[self.sequence_length:],
             sequence_length=self.sequence_length,
             batch_size=self.batch_size,
@@ -58,8 +58,6 @@ class Model:
 
         self.m.compile(loss=self.loss, metrics=["mae"], optimizer=self.opt)
         history = self.m.fit(train_ds, epochs=self.epochs, callbacks=[self.early_stopping_cb], verbose=0)
-        #valid_loss, valid_mae = self.m.evaluate(valid_set)
-        #return valid_mae * 1e6
 
         self.training_flag = True
         self.training_rounds = 0
@@ -132,8 +130,10 @@ class Model:
 
         if self.training_flag:
             input_sequence = np.array(self.rate_sequence)
+            input_sequence = self.scaler.fit_transform(input_sequence.reshape(-1, 1))
             input_sequence = input_sequence.reshape(1, self.sequence_length)
             model_prediction = self.m.predict(input_sequence, verbose=0)
+            model_prediction = self.scaler.inverse_transform(model_prediction)
             model_prediction = model_prediction[0][0]
             self.model_predicted.append(model_prediction)
 

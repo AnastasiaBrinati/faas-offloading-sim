@@ -10,7 +10,7 @@ SPEC_FILE="spec.yml"
 OUTPUT_FILE="results2.csv"
 # Scrive l'intestazione del file di output (se non esiste)
 if [ ! -f "$OUTPUT_FILE" ]; then
-    echo "function_memory,function_mean_duration,policy,cost,utility" > "$OUTPUT_FILE"
+    echo "function_mean_duration,policy,cost,utility" > "$OUTPUT_FILE"
 fi
 
 #for memory in "${MEMORIES[@]}"; do
