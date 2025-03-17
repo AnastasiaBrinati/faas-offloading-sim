@@ -1,0 +1,43 @@
+function_memory,function_mean_duration,policy,cost,utility
+
+# modello con scaling, versione tracce sintetiche (squ-saw-sin), 7200
+0.400,probabilistic-function,0.37124273206713493,81993.50000001457
+0.400,predictive-function,0.3684620648292971,81637.00000001406
+0.400,online-predictive-function,0.36738768711825587,81634.4000000142
+0.400,online-adaptive-function,0.37582883188891253,81972.20000001453
+
+# modello con scaling, versione tracce sintetiche (squ-saw-sin), 72000
+0.400,probabilistic-function,1.103723931188189,245696.50000047617
+0.400,predictive-function,1.0926595650081423,244893.50000047337
+0.400,online-predictive-function,1.098896745953903,245202.900000472
+0.400,online-adaptive-function,1.1016092800719712,245406.00000047358
+
+# modello con scaling, versione tracce reali, 360000
+0.400,probabilistic-function,10.86351591300046,1373481.5000071218
+0.400,predictive-function,10.739787228094992,1393582.60000831
+0.400,online-predictive-function,10.622179896789342,1381254.1000075461
+0.400,online-adaptive-function,10.61685254127063,1381160.7000075523
+
+# modello con scaling, versione tracce reali, 7200
+0.400,probabilistic-function,1.652903679092283,176638.50000028723
+0.400,predictive-function,1.6492145721146825,177211.50000029037
+0.400,online-predictive-function,1.6487806860856566,177618.5000002912
+0.400,online-adaptive-function,1.648990057353063,177738.40000029383
+
+# modello con scaling, versione tracce reali, 72000
+0.400,probabilistic-function,10.86351591300046,1373481.5000071218
+0.400,predictive-function,10.739787228094992,1393582.60000831
+0.400,online-predictive-function,10.607903955014319,1381977.9000076177
+0.400,online-adaptive-function,10.615071521718342,1383441.7000076796
+
+# modello con scaling + gestione mem nodo, versione tracce reali, 36000
+0.05,probabilistic-function,0.5657256446511559,1447752.0000124772
+0.05,predictive-function,0.5657256446511559,1447721.5000124755
+0.05,online-predictive-function,0.5657256446511559,1447720.6000124754
+0.05,online-adaptive-function,0.5657256446511559,1447722.4000124754
+
+# modello con scaling + gestione mem nodo, versione tracce reali, 36000
+0.400,probabilistic-function,0.027666265343460675,1162740.2999963583
+0.400,predictive-function,0.7917404964060024,1162517.2999963374
+0.400,online-predictive-function,0.8706016671673582,1162539.2999963462
+0.400,online-adaptive-function,0.9344706132350974,1162705.4999963557

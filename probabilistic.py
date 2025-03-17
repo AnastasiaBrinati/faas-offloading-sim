@@ -127,6 +127,44 @@ class ProbabilisticPolicy (Policy):
     def update(self):
         self.update_metrics()
 
+        # working on memory stuff
+        if self.node in self.simulation.node2arrivals:
+            # save previous memory
+            self.node.memories.append(self.node.curr_memory)
+
+            beta = 0.10     # extra memory margin, maybe move to node parameters
+            M = 0.0         # memory that is going to be needed
+            M_min = 512     # min amount of available memory per node in GB
+            M_max = 4096    # max amount of available memory per node in GB
+            for arv in self.simulation.node2arrivals[self.node]:
+                lambda_f = 0.0
+                f = arv.function
+                for c in arv.classes:
+                    lambda_f += self.arrival_rates[(f, c)]
+                # here once summed up the arrival rates of every function
+                memory_f = f.memory
+                service_f = f.serviceMean
+
+                M += ( lambda_f * memory_f * service_f )
+            M = M * (1+beta)
+
+            # change node memory
+            if M < M_min:
+                # set memory to min
+                M = M_min
+
+            elif M > M_max:
+                # set memory to max
+                M = M_max
+
+            # spegnimento container warm
+            if M < self.node.curr_memory:
+                # spegne (?) spero
+                self.node.warm_pool.reclaim_memory(self.node.curr_memory - M)
+
+            self.node.total_memory = M
+            self.node.curr_memory = M
+
         arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
         if arrivals > 0.0:
             # trigger the optimizer

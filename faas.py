@@ -2,6 +2,7 @@ from dataclasses import dataclass,field
 from enum import Enum
 from model import Model
 import csv
+import conf
 
 class ContainerPool:
 
@@ -55,6 +56,7 @@ class Node:
         self.name = name
         self.total_memory = memory
         self.curr_memory = memory
+        self.memories = []
         self.peer_exposed_memory_fraction = peer_exposed_memory_fraction
         self.speedup = speedup
         self.region = region
@@ -79,6 +81,13 @@ class Node:
             return
         # get error stats
         print(f"Node {self.name} using model {self.model}, mean absolute error: {self.model.get_error()}")
+
+    def get_memories(self, sim):
+        with open("results/memory/" + self.name + "_" + sim.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic") + ".csv", 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(["Memory"])  # Header
+            writer.writerows(zip(self.memories))  # Combine lists into rows
+        return
 
     def __repr__ (self):
         return self.name

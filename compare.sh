@@ -15,11 +15,11 @@ fi
 
 #for memory in "${MEMORIES[@]}"; do
   #sed -i "s/memory: [0-9]*\.[0-9]*/memory: $memory/" "$SPEC_FILE"
-  for duration in "${DURATIONS[@]}"; do
-    sed -i "s/duration_mean: [0-9]*\.[0-9]*/duration_mean: $duration/" "$SPEC_FILE"
+for duration in "${DURATIONS[@]}"; do
+  sed -i "s/duration_mean: [0-9]*\.[0-9]*/duration_mean: $duration/" "$SPEC_FILE"
 
-    # Iterate over both policy names
-    for policy in "${POLICIES[@]}"; do
+  # Iterate over both policy names
+  for policy in "${POLICIES[@]}"; do
 
       # Modify config.ini to set the current policy
       sed -i "/\[policy\]/,/^\[/ s/^name = .*/name = $policy/" "$CONFIG_FILE"
@@ -34,7 +34,7 @@ fi
 
       # Save results in CSV
       echo "$duration,$policy,$cost,$utility" >> "$OUTPUT_FILE"
-    done
   done
+done
 
 python3 results/predictions/comparison_graph.py

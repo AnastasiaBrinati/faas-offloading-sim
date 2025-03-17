@@ -320,6 +320,7 @@ class Simulation:
             arrival_proc.close()
             self.node2arrivals[node].remove(arrival_proc)
             if len(self.node2arrivals[node]) == 0:
+                node.get_memories(self)
                 del (self.node2arrivals[node])
 
         if len(self.node2arrivals) == 0:
@@ -357,14 +358,10 @@ class Simulation:
             self.__event_counter = 0
 
         if isinstance(event, Arrival):
-            # --------------------------------------------------------------------------------------
             self.handle_arrival(event)
         elif isinstance(event, Completion):
-            # --------------------------------------------------------------------------------------
-            # print("Completion")
             self.handle_completion(event)
         elif isinstance(event, PolicyUpdate):
-            # --------------------------------------------------------------------------------------
             # For every node and associated policy
             for n, p in self.node2policy.items():
                 upd_t0 = time.time()
