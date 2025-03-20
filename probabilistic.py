@@ -127,43 +127,7 @@ class ProbabilisticPolicy (Policy):
     def update(self):
         self.update_metrics()
 
-        # working on memory stuff
-        if self.node in self.simulation.node2arrivals:
-            # save previous memory
-            self.node.memories.append(self.node.curr_memory)
-
-            beta = 0.10     # extra memory margin, maybe move to node parameters
-            M = 0.0         # memory that is going to be needed
-            M_min = 512     # min amount of available memory per node in GB
-            M_max = 4096    # max amount of available memory per node in GB
-            for arv in self.simulation.node2arrivals[self.node]:
-                lambda_f = 0.0
-                f = arv.function
-                for c in arv.classes:
-                    lambda_f += self.arrival_rates[(f, c)]
-                # here once summed up the arrival rates of every function
-                memory_f = f.memory
-                service_f = f.serviceMean
-
-                M += ( lambda_f * memory_f * service_f )
-            M = M * (1+beta)
-
-            # change node memory
-            if M < M_min:
-                # set memory to min
-                M = M_min
-
-            elif M > M_max:
-                # set memory to max
-                M = M_max
-
-            # spegnimento container warm
-            if M < self.node.curr_memory:
-                # spegne (?) spero
-                self.node.warm_pool.reclaim_memory(self.node.curr_memory - M)
-
-            self.node.total_memory = M
-            self.node.curr_memory = M
+        #self.update_memory()
 
         arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
         if arrivals > 0.0:
@@ -579,6 +543,69 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
                 writer = csv.writer(f)
                 writer.writerow(["Actual", "Predicted"])  # Header
                 writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
+
+class ProbabilisticAndMemoryFunctionPolicy(ProbabilisticFunctionPolicy):
+    def update_memory(self):
+        # working on memory stuff
+        if self.node in self.simulation.node2arrivals:
+            # save previous memory
+            self.node.memories.append(self.node.total_memory)
+
+            beta = 0.10     # extra memory margin, maybe move to node parameters
+            M = 0.0         # memory that is going to be needed
+            M_min = 512     # min amount of available memory per node in GB
+            M_max = 4096    # max amount of available memory per node in GB
+            for arv in self.simulation.node2arrivals[self.node]:
+                lambda_f = 0.0
+                f = arv.function
+                for c in arv.classes:
+                    lambda_f += self.arrival_rates[(f, c)]
+                # here once summed up the arrival rates of every function
+                memory_f = f.memory
+                service_f = f.serviceMean
+
+                M += (lambda_f * memory_f * service_f)
+            M = M * (1 + beta)
+
+            # change node memory
+            if M < M_min:
+                # set memory to min
+                M = M_min
+
+            if M > M_max:
+                # set memory to max
+                M = M_max
+
+            # spegnimento container warm
+            delta_M = self.node.total_memory - M
+            # if delta_M > 0 we want to increase the total memory of the node
+            # and if delta_M > self.node.curr_memory we want to underline
+            # that what we are adding is bigger than what is currently available free
+            if delta_M > 0 and delta_M > self.node.curr_memory:
+                # we have to free some memory, how much?
+                # the difference between how much more we need and how much more we have
+                self.node.warm_pool.reclaim_memory(delta_M - self.node.curr_memory)
+
+            self.node.total_memory = M
+            # more or less how much memory we (re-)moved
+            self.node.curr_memory = self.node.curr_memory - delta_M
+
+    def update(self):
+        self.update_metrics()
+
+        self.update_memory()
+
+        arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
+        if arrivals > 0.0:
+            # trigger the optimizer
+            self.update_probabilities()
+
+        self.stats_snapshot = self.simulation.stats.to_dict()
+        self.last_update_time = self.simulation.t
+
+        # reset counters
+        self.curr_local_blocked_reqs = 0
+        self.curr_local_reqs = 0
 
 class PredictivePolicy(ProbabilisticPolicy) :
 
@@ -1244,6 +1271,70 @@ class OnlineAdaptiveFunctionPolicy(PredictiveFunctionPolicy):
                 self.init_time_edge[f] = inittime
 
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
+
+class OnlineAdaptiveAndMemoryFunctionPolicy(OnlineAdaptiveFunctionPolicy):
+
+    def update_memory(self):
+        # working on memory stuff
+        if self.node in self.simulation.node2arrivals:
+            # save previous memory
+            self.node.memories.append(self.node.total_memory)
+
+            beta = 0.10     # extra memory margin, maybe move to node parameters
+            M = 0.0         # memory that is going to be needed
+            M_min = 512     # min amount of available memory per node in GB
+            M_max = 4096    # max amount of available memory per node in GB
+            for arv in self.simulation.node2arrivals[self.node]:
+                lambda_f = 0.0
+                f = arv.function
+                for c in arv.classes:
+                    lambda_f += self.arrival_rates[(f, c)]
+                # here once summed up the arrival rates of every function
+                memory_f = f.memory
+                service_f = f.serviceMean
+
+                M += (lambda_f * memory_f * service_f)
+            M = M * (1 + beta)
+
+            # change node memory
+            if M < M_min:
+                # set memory to min
+                M = M_min
+
+            if M > M_max:
+                # set memory to max
+                M = M_max
+
+            # spegnimento container warm
+            delta_M = self.node.total_memory - M
+            # if delta_M > 0 we want to increase the total memory of the node
+            # and if delta_M > self.node.curr_memory we want to underline
+            # that what we are adding is bigger than what is currently available free
+            if delta_M > 0 and delta_M > self.node.curr_memory:
+                # we have to free some memory, how much?
+                # the difference between how much more we need and how much more we have
+                self.node.warm_pool.reclaim_memory(delta_M - self.node.curr_memory)
+
+            self.node.total_memory = M
+            # more or less how much memory we (re-)moved
+            self.node.curr_memory = self.node.curr_memory - delta_M
+
+    def update(self):
+        self.update_metrics()
+
+        self.update_memory()
+
+        arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
+        if arrivals > 0.0:
+            # trigger the optimizer
+            self.update_probabilities()
+
+        self.stats_snapshot = self.simulation.stats.to_dict()
+        self.last_update_time = self.simulation.t
+
+        # reset counters
+        self.curr_local_blocked_reqs = 0
+        self.curr_local_reqs = 0
 
 class OfflineProbabilisticPolicy (ProbabilisticPolicy):
     """

@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # Policy names to iterate over
-POLICIES=("probabilistic-function" "predictive-function" "online-predictive-function" "online-adaptive-function")
-DURATIONS=("0.400")
+POLICIES=("probabilistic-function" "probabilistic-memory-function" "predictive-function"\
+          "online-predictive-function" "online-adaptive-function" "online-adaptive-memory-function")
+DURATIONS=("0.3")
 #MEMORIES=("128")
 CONFIG_FILE="config.ini"
 SPEC_FILE="spec.yml"

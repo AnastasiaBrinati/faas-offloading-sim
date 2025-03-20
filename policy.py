@@ -69,17 +69,11 @@ class Policy:
 
     def _get_edge_peers_probabilities (self):
         peers = self._get_edge_peers()
-        for peer in peers:
-            if peer.curr_memory < 0.0:
-                print(peer)
-                print(peer.curr_memory)
-            if peer.peer_exposed_memory_fraction < 0.0:
-                print(peer)
-                print(peer.peer_exposed_memory_fraction)
-            assert(peer.curr_memory*peer.peer_exposed_memory_fraction >= 0.0)
-        total_memory = sum([x.curr_memory*x.peer_exposed_memory_fraction for x in peers])
+            #assert(peer.curr_memory*peer.peer_exposed_memory_fraction >= 0.0)
+
+        total_memory = sum([max(0,x.curr_memory)*x.peer_exposed_memory_fraction for x in peers])
         if total_memory > 0.0:
-            probs = [x.curr_memory*x.peer_exposed_memory_fraction/total_memory for x in peers]
+            probs = [max(0,x.curr_memory)*x.peer_exposed_memory_fraction/total_memory for x in peers]
         else:
             n = len(peers)
             probs = [1.0/n for x in peers]

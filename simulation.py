@@ -147,6 +147,8 @@ class Simulation:
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-function":
             return probabilistic.ProbabilisticFunctionPolicy(self, node)
+        elif configured_policy == "probabilistic-memory-function":
+            return probabilistic.ProbabilisticAndMemoryFunctionPolicy(self, node)
         elif configured_policy == "predictive":
             return probabilistic.PredictivePolicy(self, node)
         elif configured_policy == "predictive-function":
@@ -157,6 +159,8 @@ class Simulation:
             return probabilistic.AdaptiveFunctionPolicy(self, node)
         elif configured_policy == "online-adaptive-function":
             return probabilistic.OnlineAdaptiveFunctionPolicy(self, node)
+        elif configured_policy == "online-adaptive-memory-function":
+            return probabilistic.OnlineAdaptiveAndMemoryFunctionPolicy(self, node)
         # --------------------------------------------------------------------------------------
         elif configured_policy == "probabilistic-offline":
             return probabilistic.OfflineProbabilisticPolicy(self, node)
@@ -452,7 +456,9 @@ class Simulation:
                 f"{f},{c},{n},{event.offloaded_from != None and len(event.offloaded_from) > 0},{event.cold},{dat},{rt}",
                 file=self.resp_times_file)
 
-        n.warm_pool.append((f, self.t + self.expiration_timeout))
+        if n.curr_memory >= 0:
+            # needed for scaling
+            n.warm_pool.append((f, self.t + self.expiration_timeout))
         if self.external_arrivals_allowed:
             self.schedule(self.t + self.expiration_timeout, CheckExpiredContainers(n))
 
