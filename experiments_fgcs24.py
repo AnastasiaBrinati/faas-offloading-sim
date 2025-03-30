@@ -15,15 +15,15 @@ from main import read_spec_file
 from numpy.random import SeedSequence, default_rng
 
 DEFAULT_CONFIG_FILE = "config.ini"
-DEFAULT_OUT_DIR = "results"
+DEFAULT_OUT_DIR = "results/results/"
 DEFAULT_DURATION = 3600
 SEEDS=[1,293,287844,2902,944,9573,102903,193,456,71]
 PERCENTILES=np.array([1,5,10,25,50,75,90,95,99])/100.0
 
 
 def print_results (results, filename=None):
-    for line in results:
-        print(line)
+    #for line in results:
+    #    print(line)
     if filename is not None:
         with open(filename, "w") as of:
             for line in results:
@@ -73,10 +73,10 @@ def _experiment (config, seed_sequence, infra, spec_file_name, return_resp_times
 def relevant_stats_dict (stats):
     result = {}
     result["Utility"] = stats.utility
-    result["Penalty"] = stats.penalty
-    result["NetUtility"] = stats.utility-stats.penalty
+    #result["Penalty"] = stats.penalty
+    #result["NetUtility"] = stats.utility-stats.penalty
     result["Cost"] = stats.cost
-    result["BudgetExcessPerc"] = max(0, (stats.cost-stats.budget)/stats.budget*100)
+    #result["BudgetExcessPerc"] = max(0, (stats.cost-stats.budget)/stats.budget*100)
     return result
 
 
@@ -175,6 +175,7 @@ def experiment_varying_arrivals (args, config):
     with open(os.path.join(DEFAULT_OUT_DIR, f"{exp_tag}_conf.ini"), "w") as of:
         config.write(of)
 
+
 def experiment_main_comparison(args, config):
     results = []
     exp_tag = "mainComparison"
@@ -187,7 +188,11 @@ def experiment_main_comparison(args, config):
     config.set(conf.SEC_POLICY, conf.POLICY_ARRIVAL_RATE_ALPHA, "0.3")
 
 
-    POLICIES = ["random", "basic", "basic-edge", "basic-budget", "probabilistic-legacy", "probabilistic", "greedy", "greedy-min-cost", "greedy-budget", "probabilistic-legacy-strict", "probabilistic-strict", "probabilistic-strictAlt", "probabilisticAlt"]
+    #POLICIES = ["random", "basic", "basic-edge", "basic-budget", "probabilistic-legacy", "probabilistic", "greedy", "greedy-min-cost", "greedy-budget", "probabilistic-legacy-strict", "probabilistic-strict", "probabilistic-strictAlt", "probabilisticAlt"]
+    POLICIES = ["probabilistic-function", "predictive-function",\
+                "online-predictive-function", "online-adaptive-function",\
+                "probabilistic-memory-function", "predictive-memory-function",\
+                "online-predictive-memory-function", "online-adaptive-memory-function"]
 
     # Check existing results
     old_results = None
@@ -201,17 +206,17 @@ def experiment_main_comparison(args, config):
         config.set(conf.SEC_SIM, conf.SEED, str(seed))
         seed_sequence = SeedSequence(seed)
         for latency in [0.050, 0.100, 0.200]:
-            for budget in [0.25, 0.5, 1,2,10]:
+            for budget in [1,2,10,20]:
                 config.set(conf.SEC_POLICY, conf.HOURLY_BUDGET, str(budget))
-                for functions in [5]:
+                for functions in [3]:
                     for pol in POLICIES:
+                        print(f"policy: {pol}")
                         config.set(conf.SEC_POLICY, conf.POLICY_NAME, pol)
 
                         if "greedy" in pol:
                             config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "full-knowledge")
                         else:
                             config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "naive-per-function")
-
 
                         keys = {}
                         keys["Policy"] = pol
@@ -233,7 +238,7 @@ def experiment_main_comparison(args, config):
                             continue
 
                         rng = default_rng(seed_sequence.spawn(1)[0])
-                        temp_spec_file = generate_random_temp_spec (rng, n_functions=functions)
+                        temp_spec_file = generate_random_temp_spec (rng, n_functions=functions, dynamic_rate_coeff=0.0)
                         infra = default_infra(edge_cloud_latency=latency)
                         stats = _experiment(config, seed_sequence, infra, temp_spec_file.name)
                         temp_spec_file.close()
@@ -583,13 +588,16 @@ def experiment_scalability (args, config):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--experiment', action='store', required=False, default="", type=str)
+    # if you 'force' old results will be deleted
     parser.add_argument('--force', action='store_true', required=False, default=False)
+    # additional option to force results and seeds
     parser.add_argument('--debug', action='store_true', required=False, default=False)
+
     parser.add_argument('--seed', action='store', required=False, default=None, type=int)
 
     args = parser.parse_args()
 
-    config = conf.parse_config_file("default.ini")
+    config = conf.parse_config_file("config.ini")
     config.set(conf.SEC_SIM, conf.STAT_PRINT_INTERVAL, "-1")
     config.set(conf.SEC_SIM, conf.CLOSE_DOOR_TIME, str(DEFAULT_DURATION))
 
@@ -601,14 +609,19 @@ if __name__ == "__main__":
         SEEDS = [int(args.seed)]
     
     if args.experiment.lower() == "a":
+        print("experiment to compare different policies and function configurations results")
         experiment_main_comparison(args, config)
     elif args.experiment.lower() == "b":
+        print("experiment b")
         experiment_arrivals_to_all(args, config)
     elif args.experiment.lower() == "v":
+        print("experiment v")
         experiment_varying_arrivals(args, config)
     elif args.experiment.lower() == "s":
+        print("experiment s")
         experiment_scalability(args, config)
     elif args.experiment.lower() == "x":
+        print("experiment x")
         experiment_simple(args, config)
     else:
         print("Unknown experiment!")

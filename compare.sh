@@ -1,21 +1,21 @@
 #!/bin/bash
 
 # Policy names to iterate over
-POLICIES=("probabilistic-function" "probabilistic-memory-function" "predictive-function"\
-          "online-predictive-function" "online-adaptive-function" "online-adaptive-memory-function")
+
+POLICIES=("probabilistic-function" "predictive-function" "online-predictive-function" "online-adaptive-function"
+          "probabilistic-memory-function" "predictive-memory-function" "online-predictive-memory-function" "online-adaptive-memory-function")
+
 DURATIONS=("0.3")
 #MEMORIES=("128")
 CONFIG_FILE="config.ini"
 SPEC_FILE="spec.yml"
 
-OUTPUT_FILE="results2.csv"
+OUTPUT_FILE="results_final.csv"
 # Scrive l'intestazione del file di output (se non esiste)
 if [ ! -f "$OUTPUT_FILE" ]; then
     echo "function_mean_duration,policy,cost,utility" > "$OUTPUT_FILE"
 fi
 
-#for memory in "${MEMORIES[@]}"; do
-  #sed -i "s/memory: [0-9]*\.[0-9]*/memory: $memory/" "$SPEC_FILE"
 for duration in "${DURATIONS[@]}"; do
   sed -i "s/duration_mean: [0-9]*\.[0-9]*/duration_mean: $duration/" "$SPEC_FILE"
 

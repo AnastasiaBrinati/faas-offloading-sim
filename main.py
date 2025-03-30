@@ -16,6 +16,7 @@ def read_spec_file (spec_file_name, infra, config):
     peer_exposed_memory_fraction = config.getfloat(conf.SEC_SIM, conf.EDGE_EXPOSED_FRACTION, fallback=0.5)
 
     with open(spec_file_name, "r") as stream:
+
         spec = yaml.safe_load(stream)
 
         classname2class={}

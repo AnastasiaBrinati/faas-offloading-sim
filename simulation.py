@@ -123,6 +123,7 @@ class Simulation:
                     self.init_time[(fun, node)] = fun.initMean / node.speedup
 
     def new_policy(self, configured_policy, node):
+        #print(f"POLICY TO BE USED: {configured_policy}")
         if configured_policy == "basic":
             return policy.BasicPolicy(self, node)
         if configured_policy == "basic-budget":
@@ -153,8 +154,12 @@ class Simulation:
             return probabilistic.PredictivePolicy(self, node)
         elif configured_policy == "predictive-function":
             return probabilistic.PredictiveFunctionPolicy(self, node)
+        elif configured_policy == "predictive-memory-function":
+            return probabilistic.PredictiveAndMemoryFunctionPolicy(self, node)
         elif configured_policy == "online-predictive-function":
             return probabilistic.OnlinePredictiveFunctionPolicy(self, node)
+        elif configured_policy == "online-predictive-memory-function":
+            return probabilistic.OnlinePredictiveAndMemoryFunctionPolicy(self, node)
         elif configured_policy == "adaptive-function":
             return probabilistic.AdaptiveFunctionPolicy(self, node)
         elif configured_policy == "online-adaptive-function":

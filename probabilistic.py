@@ -9,6 +9,9 @@ from optimization import OptProblemParams
 
 ADAPTIVE_EDGE_MEMORY_COEFFICIENT=True
 
+# Probabilistic policies:
+#      these implement a moving average exponential smoothing technique
+#      as forecasting method for the arrival rate λ{f,k}
 
 class ProbabilisticPolicy (Policy):
 
@@ -126,8 +129,6 @@ class ProbabilisticPolicy (Policy):
 
     def update(self):
         self.update_metrics()
-
-        #self.update_memory()
 
         arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
         if arrivals > 0.0:
@@ -545,6 +546,7 @@ class ProbabilisticFunctionPolicy(ProbabilisticPolicy):
                 writer.writerows(zip(self.actual_rates[self.node][arv.function], self.predicted_rates[self.node][arv.function][:-1]))  # Combine lists into rows
 
 class ProbabilisticAndMemoryFunctionPolicy(ProbabilisticFunctionPolicy):
+
     def update_memory(self):
         # working on memory stuff
         if self.node in self.simulation.node2arrivals:
@@ -564,6 +566,7 @@ class ProbabilisticAndMemoryFunctionPolicy(ProbabilisticFunctionPolicy):
                 memory_f = f.memory
                 service_f = f.serviceMean
 
+                # Little
                 M += (lambda_f * memory_f * service_f)
             M = M * (1 + beta)
 
@@ -607,17 +610,130 @@ class ProbabilisticAndMemoryFunctionPolicy(ProbabilisticFunctionPolicy):
         self.curr_local_blocked_reqs = 0
         self.curr_local_reqs = 0
 
-class PredictivePolicy(ProbabilisticPolicy) :
+# Other probabilistic policies that were already here
+
+class OfflineProbabilisticPolicy(ProbabilisticPolicy):
+    """
+    Probabilistic, with probabilities computed offline with *known* parameters.
+    An ideal approach.
+    """
 
     def __init__(self, simulation, node, strict_budget_enforce=False):
-        super().__init__(simulation, node)
-        self.func_errors = {}
+        super().__init__(simulation, node, strict_budget_enforce)
 
-    def get_function_errors(self, f):
-        if self.node in self.func_errors:
-            if len(self.func_errors[self.node][f]) > 0:
-                e = sum(x for x in self.func_errors[self.node][f]) / len(self.func_errors[self.node][f])
-                print(f"{self.node}, model error for {f}: {e}")
+        if not self.edge_enabled:
+            # probably redundant, just to be sure
+            self.aggregated_edge_memory = 0
+
+        if not self.node in self.simulation.node2arrivals:
+            # No arrivals here... just skip
+            self.probs = {(f, c): [0.5, 0.5, 0., 0.] for f in simulation.functions for c in simulation.classes}
+            return
+
+        self.update_metrics()
+
+        params = OptProblemParams(self.node,
+                                  self.cloud,
+                                  self.simulation.functions,
+                                  self.simulation.classes,
+                                  self.arrival_rates,
+                                  self.estimated_service_time,
+                                  self.estimated_service_time_cloud,
+                                  self.init_time_local,
+                                  self.init_time_cloud,
+                                  self.cold_start_prob_local,
+                                  self.cold_start_prob_cloud,
+                                  self.cloud_rtt,
+                                  self.cloud_bw,
+                                  1.0,
+                                  self.local_budget,
+                                  self.aggregated_edge_memory,
+                                  self.estimated_service_time_edge,
+                                  self.edge_rtt,
+                                  self.cold_start_prob_edge,
+                                  self.init_time_edge,
+                                  self.edge_bw)
+
+        self.probs = self.get_optimizer().update_probabilities(params, self.simulation.verbosity)
+
+    def update(self):
+        pass
+
+    def update_metrics(self):
+
+        self.estimated_service_time = {}
+        self.estimated_service_time_cloud = {}
+
+        for f in self.simulation.functions:
+            self.estimated_service_time[f] = f.serviceMean / self.node.speedup
+            self.estimated_service_time_cloud[f] = f.serviceMean / self.cloud.speedup
+
+        for arv_proc in self.simulation.node2arrivals[self.node]:
+            f = arv_proc.function
+            # NOTE: this only works for some arrival processes (e.g., not for
+            # trace-driven)
+            rate_per_class = arv_proc.get_per_class_mean_rate()
+            for c, r in rate_per_class.items():
+                self.arrival_rates[(f, c)] = r
+
+        self.estimate_cold_start_prob(self.simulation.stats)  # stats are empty at this point...
+
+        self.cloud_rtt = 2 * self.simulation.infra.get_latency(self.node, self.cloud)
+        self.cloud_bw = self.simulation.infra.get_bandwidth(self.node, self.cloud)
+
+        if self.edge_enabled:
+            neighbor_probs, neighbors = self._get_edge_peers_probabilities()
+            if len(neighbors) == 0:
+                self.aggregated_edge_memory = 0
+            else:
+                self.aggregated_edge_memory = max(1, sum([x.curr_memory * x.peer_exposed_memory_fraction for x in
+                                                          neighbors]))
+
+            self.edge_rtt = sum(
+                [self.simulation.infra.get_latency(self.node, x) * prob for x, prob in zip(neighbors, neighbor_probs)])
+            self.edge_bw = sum([self.simulation.infra.get_bandwidth(self.node, x) * prob for x, prob in
+                                zip(neighbors, neighbor_probs)])
+
+            self.estimated_service_time_edge = {}
+            for f in self.simulation.functions:
+                inittime = 0.0
+                servtime = 0.0
+                for neighbor, prob in zip(neighbors, neighbor_probs):
+                    servtime += prob * f.serviceMean / neighbor.speedup
+                    inittime += prob * self.simulation.init_time[(f, neighbor)]
+                if servtime == 0.0:
+                    servtime = self.estimated_service_time[f]
+                self.estimated_service_time_edge[f] = servtime
+                self.init_time_edge[f] = inittime
+
+            self.estimate_edge_cold_start_prob(self.simulation.stats, neighbors, neighbor_probs)
+
+class RandomPolicy(Policy):
+
+    def __init__(self, simulation, node):
+        super().__init__(simulation, node)
+        self.rng = self.simulation.policy_rng1
+        self.edge_enabled = simulation.config.getboolean(conf.SEC_POLICY, conf.EDGE_OFFLOADING_ENABLED, fallback="true")
+        self.decisions = [SchedulerDecision.EXEC, SchedulerDecision.DROP, SchedulerDecision.OFFLOAD_CLOUD]
+        if self.edge_enabled:
+            self.decisions.append(SchedulerDecision.OFFLOAD_EDGE)
+
+    def schedule(self, f, c, offloaded_from):
+        decision = self.rng.choice(self.decisions)
+
+        if decision == SchedulerDecision.EXEC and not self.can_execute_locally(f):
+            decision = self.rng.choice(self.decisions[1:])
+        return (decision, None)
+
+    def update(self):
+        pass
+
+# Predictive policies:
+#       these implement ML models, RNNs to be exact,
+#       trained a priori on the arrival rate traces
+#       of each function f
+
+class PredictivePolicy(ProbabilisticPolicy) :
 
     def get_stats(self):
         super().get_stats()
@@ -695,9 +811,6 @@ class PredictivePolicy(ProbabilisticPolicy) :
                         # get the % of that f compared to the total (e.g. f1 / f1+f2)
                         func_p = new_arrivals[arv.function] / total_new_arrivals
 
-                        # here we store the error per function
-                        self.func_errors[self.node][arv.function].append(func_p*(np.abs(predicted_rate-actual_rate)))
-
                         for c in arv.classes:
                             # get class probabilities
                             idx_c = arv.classes.index(c)
@@ -712,11 +825,6 @@ class PredictivePolicy(ProbabilisticPolicy) :
                     continue
                 # praticamente la prima volta che un nodo ha un arrivo:
                 self.arrival_rates[(f, c)] = stats.arrivals[(f, c, self.node)] / self.simulation.t
-
-                # Inizializza lista con errori per funzione
-                if n not in self.func_errors.keys():
-                    self.func_errors[n] = {}
-                self.func_errors[n][f] = []
 
                 # Inizializza rates
                 self.actual_rates[n] = [self.arrival_rates[(f, c)]]
@@ -758,10 +866,6 @@ class PredictivePolicy(ProbabilisticPolicy) :
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
 
 class PredictiveFunctionPolicy(ProbabilisticPolicy) :
-
-    def __init__(self, simulation, node, strict_budget_enforce=False):
-        super().__init__(simulation, node)
-        self.func_errors = {}
 
     def save_probabilities(self, new_probs):
         p_name = self.simulation.config.get(conf.SEC_POLICY, conf.POLICY_NAME, fallback="basic")
@@ -908,6 +1012,77 @@ class PredictiveFunctionPolicy(ProbabilisticPolicy) :
 
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
 
+class PredictiveAndMemoryFunctionPolicy(PredictiveFunctionPolicy) :
+
+    def update_memory(self):
+        # working on memory stuff
+        if self.node in self.simulation.node2arrivals:
+            # save previous memory
+            self.node.memories.append(self.node.total_memory)
+
+            beta = 0.10     # extra memory margin, maybe move to node parameters
+            M = 0.0         # memory that is going to be needed
+            M_min = 512     # min amount of available memory per node in GB
+            M_max = 4096    # max amount of available memory per node in GB
+            for arv in self.simulation.node2arrivals[self.node]:
+                lambda_f = 0.0
+                f = arv.function
+                for c in arv.classes:
+                    lambda_f += self.arrival_rates[(f, c)]
+                # here once summed up the arrival rates of every function
+                memory_f = f.memory
+                service_f = f.serviceMean
+
+                # Little
+                M += (lambda_f * memory_f * service_f)
+            M = M * (1 + beta)
+
+            # change node memory
+            if M < M_min:
+                # set memory to min
+                M = M_min
+
+            if M > M_max:
+                # set memory to max
+                M = M_max
+
+            # spegnimento container warm
+            delta_M = self.node.total_memory - M
+            # if delta_M > 0 we want to decrease the total memory of the node
+            # because what we will need is less than what we have
+            # and if delta_M > self.node.curr_memory we want to underline
+            # that we have available more than we need
+            if delta_M > 0 and delta_M > self.node.curr_memory:
+                # we have to free some memory, how much?
+                # the difference between how much more we need and how much more we have
+                self.node.warm_pool.reclaim_memory(delta_M - self.node.curr_memory)
+
+            self.node.total_memory = M
+            # more or less how much memory we (re-)moved
+            self.node.curr_memory = self.node.curr_memory - delta_M
+
+    def update(self):
+        self.update_metrics()
+
+        self.update_memory()
+
+        arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
+        if arrivals > 0.0:
+            # trigger the optimizer
+            self.update_probabilities()
+
+        self.stats_snapshot = self.simulation.stats.to_dict()
+        self.last_update_time = self.simulation.t
+
+        # reset counters
+        self.curr_local_blocked_reqs = 0
+        self.curr_local_reqs = 0
+
+# Online Predictive policies:
+#       these implement ML models, RNNs to be exact,
+#       NOT trained a priori on any trace but
+#       iteratively every N updates
+
 class OnlinePredictiveFunctionPolicy(PredictiveFunctionPolicy):
 
     def update_metrics(self):
@@ -1029,6 +1204,79 @@ class OnlinePredictiveFunctionPolicy(PredictiveFunctionPolicy):
                 self.init_time_edge[f] = inittime
 
             self.estimate_edge_cold_start_prob(stats, neighbors, neighbor_probs)
+
+class OnlinePredictiveAndMemoryFunctionPolicy(OnlinePredictiveFunctionPolicy):
+
+    def update_memory(self):
+        # working on memory stuff
+        if self.node in self.simulation.node2arrivals:
+            # save previous memory
+            self.node.memories.append(self.node.total_memory)
+
+            beta = 0.10     # extra memory margin, maybe move to node parameters
+            M = 0.0         # memory that is going to be needed
+            M_min = 512     # min amount of available memory per node in GB
+            M_max = 4096    # max amount of available memory per node in GB
+            for arv in self.simulation.node2arrivals[self.node]:
+                lambda_f = 0.0
+                f = arv.function
+                for c in arv.classes:
+                    lambda_f += self.arrival_rates[(f, c)]
+                # here once summed up the arrival rates of every function
+                memory_f = f.memory
+                service_f = f.serviceMean
+
+                # Little
+                M += (lambda_f * memory_f * service_f)
+            M = M * (1 + beta)
+
+            # change node memory
+            if M < M_min:
+                # set memory to min
+                M = M_min
+
+            if M > M_max:
+                # set memory to max
+                M = M_max
+
+            # spegnimento container warm
+            delta_M = self.node.total_memory - M
+            # if delta_M > 0 we want to increase the total memory of the node
+            # and if delta_M > self.node.curr_memory we want to underline
+            # that what we are adding is bigger than what is currently available free
+            if delta_M > 0 and delta_M > self.node.curr_memory:
+                # we have to free some memory, how much?
+                # the difference between how much more we need and how much more we have
+                self.node.warm_pool.reclaim_memory(delta_M - self.node.curr_memory)
+
+            self.node.total_memory = M
+            # more or less how much memory we (re-)moved
+            self.node.curr_memory = self.node.curr_memory - delta_M
+
+    def update(self):
+        self.update_metrics()
+
+        self.update_memory()
+
+        arrivals = sum([self.arrival_rates.get((f,c), 0.0) for f in self.simulation.functions for c in self.simulation.classes])
+        if arrivals > 0.0:
+            # trigger the optimizer
+            self.update_probabilities()
+
+        self.stats_snapshot = self.simulation.stats.to_dict()
+        self.last_update_time = self.simulation.t
+
+        # reset counters
+        self.curr_local_blocked_reqs = 0
+        self.curr_local_reqs = 0
+
+# Adaptive policy:
+#       Interchange probabilistic and machine learning policies
+#       depending on which one had the most accurate predictions
+#       over the last M values
+#       First scenario presented is only used to
+#       test if the algorithm works:
+#       it should choose correctly between the perfectly trained model and the probabilistic
 
 class AdaptiveFunctionPolicy(PredictiveFunctionPolicy):
     def update_metrics(self):
@@ -1335,118 +1583,3 @@ class OnlineAdaptiveAndMemoryFunctionPolicy(OnlineAdaptiveFunctionPolicy):
         # reset counters
         self.curr_local_blocked_reqs = 0
         self.curr_local_reqs = 0
-
-class OfflineProbabilisticPolicy (ProbabilisticPolicy):
-    """
-    Probabilistic, with probabilities computed offline with *known* parameters.
-    An ideal approach.
-    """
-
-
-    def __init__(self, simulation, node, strict_budget_enforce=False):
-        super().__init__(simulation, node, strict_budget_enforce)
-
-        if not self.edge_enabled:
-            # probably redundant, just to be sure
-            self.aggregated_edge_memory = 0
-
-        if not self.node in self.simulation.node2arrivals:
-            # No arrivals here... just skip
-            self.probs = {(f, c): [0.5, 0.5, 0., 0.] for f in simulation.functions for c in simulation.classes}
-            return
-
-        self.update_metrics()
-
-        params = OptProblemParams(self.node, 
-                self.cloud, 
-                self.simulation.functions,
-                self.simulation.classes,
-                self.arrival_rates, 
-                self.estimated_service_time, 
-                self.estimated_service_time_cloud, 
-                self.init_time_local, 
-                self.init_time_cloud, 
-                self.cold_start_prob_local,
-                self.cold_start_prob_cloud,
-                self.cloud_rtt, 
-                self.cloud_bw,
-                1.0,
-                self.local_budget,
-                self.aggregated_edge_memory,
-                self.estimated_service_time_edge, 
-                self.edge_rtt,
-                self.cold_start_prob_edge, 
-                self.init_time_edge, 
-                self.edge_bw)
-
-        self.probs = self.get_optimizer().update_probabilities(params, self.simulation.verbosity)
-
-    def update(self):
-        pass
-
-    def update_metrics(self):
-
-        self.estimated_service_time = {}
-        self.estimated_service_time_cloud = {}
-
-        for f in self.simulation.functions:
-            self.estimated_service_time[f] = f.serviceMean / self.node.speedup
-            self.estimated_service_time_cloud[f] = f.serviceMean / self.cloud.speedup
-        
-        for arv_proc in self.simulation.node2arrivals[self.node]:
-            f = arv_proc.function
-            # NOTE: this only works for some arrival processes (e.g., not for
-            # trace-driven)
-            rate_per_class = arv_proc.get_per_class_mean_rate()
-            for c,r in rate_per_class.items():
-                self.arrival_rates[(f, c)] = r
-
-        self.estimate_cold_start_prob(self.simulation.stats) # stats are empty at this point...
-
-        self.cloud_rtt = 2 * self.simulation.infra.get_latency(self.node, self.cloud)
-        self.cloud_bw = self.simulation.infra.get_bandwidth(self.node, self.cloud)
-
-        if self.edge_enabled:
-            neighbor_probs, neighbors = self._get_edge_peers_probabilities()
-            if len(neighbors) == 0:
-                self.aggregated_edge_memory = 0
-            else:
-                self.aggregated_edge_memory = max(1,sum([x.curr_memory*x.peer_exposed_memory_fraction for x in neighbors]))
-
-            self.edge_rtt = sum([self.simulation.infra.get_latency(self.node, x)*prob for x,prob in zip(neighbors, neighbor_probs)])
-            self.edge_bw = sum([self.simulation.infra.get_bandwidth(self.node, x)*prob for x,prob in zip(neighbors, neighbor_probs)])
-
-            self.estimated_service_time_edge = {}
-            for f in self.simulation.functions:
-                inittime = 0.0
-                servtime = 0.0
-                for neighbor, prob in zip(neighbors, neighbor_probs):
-                    servtime += prob*f.serviceMean/neighbor.speedup
-                    inittime += prob*self.simulation.init_time[(f,neighbor)]
-                if servtime == 0.0:
-                    servtime = self.estimated_service_time[f]
-                self.estimated_service_time_edge[f] = servtime
-                self.init_time_edge[f] = inittime
-
-            self.estimate_edge_cold_start_prob(self.simulation.stats, neighbors, neighbor_probs)
-
-class RandomPolicy(Policy):
-
-    def __init__(self, simulation, node):
-        super().__init__(simulation, node)
-        self.rng = self.simulation.policy_rng1
-        self.edge_enabled = simulation.config.getboolean(conf.SEC_POLICY, conf.EDGE_OFFLOADING_ENABLED, fallback="true")
-        self.decisions = [SchedulerDecision.EXEC, SchedulerDecision.DROP, SchedulerDecision.OFFLOAD_CLOUD]
-        if self.edge_enabled:
-            self.decisions.append(SchedulerDecision.OFFLOAD_EDGE)
-
-    def schedule(self, f, c, offloaded_from):
-        decision = self.rng.choice(self.decisions)
-
-        if decision == SchedulerDecision.EXEC and not self.can_execute_locally(f):
-            decision = self.rng.choice(self.decisions[1:])
-        return (decision, None)
-
-    def update(self):
-        pass
-

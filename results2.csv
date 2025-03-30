@@ -1,17 +1,5 @@
 function_memory,function_mean_duration,policy,cost,utility
 
-# modello con scaling, versione tracce sintetiche (squ-saw-sin), 7200
-0.400,probabilistic-function,0.37124273206713493,81993.50000001457
-0.400,predictive-function,0.3684620648292971,81637.00000001406
-0.400,online-predictive-function,0.36738768711825587,81634.4000000142
-0.400,online-adaptive-function,0.37582883188891253,81972.20000001453
-
-# modello con scaling, versione tracce sintetiche (squ-saw-sin), 72000
-0.400,probabilistic-function,1.103723931188189,245696.50000047617
-0.400,predictive-function,1.0926595650081423,244893.50000047337
-0.400,online-predictive-function,1.098896745953903,245202.900000472
-0.400,online-adaptive-function,1.1016092800719712,245406.00000047358
-
 # modello con scaling, versione tracce reali, 360000
 0.400,probabilistic-function,10.86351591300046,1373481.5000071218
 0.400,predictive-function,10.739787228094992,1393582.60000831
@@ -29,19 +17,6 @@ function_memory,function_mean_duration,policy,cost,utility
 0.400,predictive-function,10.739787228094992,1393582.60000831
 0.400,online-predictive-function,10.607903955014319,1381977.9000076177
 0.400,online-adaptive-function,10.615071521718342,1383441.7000076796
-
-DA QUI IN POI CON gestione mem nodo
-# versione tracce reali, 36000
-0.05,probabilistic-function,0.5657256446511559,1447752.0000124772
-0.05,predictive-function,0.5657256446511559,1447721.5000124755
-0.05,online-predictive-function,0.5657256446511559,1447720.6000124754
-0.05,online-adaptive-function,0.5657256446511559,1447722.4000124754
-
-# versione tracce reali, 36000
-0.400,probabilistic-function,0.027666265343460675,1162740.2999963583
-0.400,predictive-function,0.7917404964060024,1162517.2999963374
-0.400,online-predictive-function,0.8706016671673582,1162539.2999963462
-0.400,online-adaptive-function,0.9344706132350974,1162705.4999963557
 
 mega run with 2 nodes
 
@@ -75,10 +50,36 @@ func_mem = 256
 
 
 # big run with only 2 memory policies
-
+close-door-time = 144000
+memory: 128
 0.3,probabilistic-function,11.417782029866736,3364041.000106713
 0.3,probabilistic-memory-function,26.377020687592726,2528175.400092556
 0.3,predictive-function,10.779112022300058,3377076.500107558
 0.3,online-predictive-function,11.037792840984618,3342676.2001072904
 0.3,online-adaptive-function,11.090798785314698,3355299.8001064677
 0.3,online-adaptive-memory-function,28.466011793897533,2926250.4000926055
+
+close-door-time = 3600
+memory: 128
+
+0.3,probabilistic-function,0.5300191078463364,127626.9000001515
+0.3,probabilistic-memory-function,1.1664387852114784,119749.00000016241
+0.3,predictive-function,0.5339587868490399,127606.80000015024
+0.3,online-predictive-function,0.5427955084267488,128314.60000015152
+0.3,online-adaptive-function,0.5427955084267488,128314.60000015152
+0.3,online-adaptive-memory-function,1.1664387852114784,119749.00000016241
+
+solo memory policies, close-door-time = 144000:
+0.3,probabilistic-memory-function,26.377020687592726,2528175.400092556
+0.3,online-adaptive-memory-function,30.7648080816189,3222703.0000964855
+
+
+close-door-time = 72000
+mem = 128
+traces: all
+0.3,probabilistic-function,0.04863207421406001,12353.200000001383
+0.3,probabilistic-memory-function,0.10401593964159198,12780.40000000153
+0.3,predictive-function,0.04832417019473981,12290.900000001395
+0.3,online-predictive-function,0.04820033849934721,12313.400000001404
+0.3,online-adaptive-function,0.04820033849934721,12313.400000001404
+0.3,online-adaptive-memory-function,0.10401593964159198,12780.40000000153
