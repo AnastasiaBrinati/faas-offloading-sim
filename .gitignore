@@ -8,5 +8,6 @@ resptimes.csv
 results/
 traces/
 .vscode/
+tuning/
 models/training/
 results.csv
