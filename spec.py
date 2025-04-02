@@ -4,6 +4,7 @@ from scipy.stats import truncnorm
 import numpy as np
 from numpy.random import uniform, choice
 import map as MAP
+import random
 
 ARRIVAL_DISTRIBUTIONS = ["exp","mmpp","erlang","hyper"]
 
@@ -55,24 +56,24 @@ def generate_temp_spec (n_functions=5, load_coeff=1.0, dynamic_rate_coeff=1.0, a
     write_spec(ntemp, functions, classes, nodes, load_coeff, dynamic_rate_coeff, arrivals_to_single_node)
     return ntemp
 
-def generate_random_temp_spec (rng, n_functions=5, load_coeff=1.0, dynamic_rate_coeff=1.0, arrivals_to_single_node=True,
-                   n_classes=4, cloud_cost=0.00005, cloud_speedup=1.0, n_edges=5):
+def generate_random_temp_spec (rng, n_functions=6, load_coeff=1.0, dynamic_rate_coeff=1.0, arrivals_to_single_node=True,
+                   n_classes=3, cloud_cost=0.0001, cloud_speedup=1.0, n_edges=2):
 
     classes = [{'name': 'critical', 'max_resp_time': 0.5, 'utility': 1.0, 'arrival_weight': 1.0},
+               {'name': 'best-effort', 'max_resp_time': 0.5, 'utility': 0.1, 'arrival_weight': 1.0},
+               {'name': 'deferrable', 'max_resp_time': 5.0, 'utility': 0.5, 'arrival_weight': 1.0},
                {'name': 'standard', 'max_resp_time': 0.5, 'utility': 0.01, 'arrival_weight': 7.0},
                {'name': 'batch', 'max_resp_time': 99.0, 'utility': 1.0, 'arrival_weight': 1.0},
                {'name': 'criticalP', 'max_resp_time': 0.5, 'utility': 1.0, 'arrival_weight': 1.0}]
-    nodes = [{'name': 'edge1', 'region': 'edge', 'memory': 4096},
-             {'name': 'edge2', 'region': 'edge', 'memory': 4096},
-             {'name': 'edge3', 'region': 'edge', 'memory': 4096},
-             {'name': 'edge4', 'region': 'edge', 'memory': 4096},
-             {'name': 'edge5', 'region': 'edge', 'memory': 4096},
-             {'name': 'cloud1', 'region': 'cloud', 'cost': cloud_cost, 'speedup': cloud_speedup, 'memory': 128000}]
-    functions = [{'name': 'f1', 'memory': 512, 'duration_mean': 0.4, 'duration_scv': 1.0, 'init_mean': 0.5, 'trace': "traces/synthetic/debs15_1_interarrivals.csv", 'model': "models/debs15_1_rnn.pkl"},
-                 {'name': 'f2', 'memory': 512, 'duration_mean': 0.2, 'duration_scv': 1.0, 'init_mean': 0.25, 'trace': "traces/synthetic/debs15_2_interarrivals.csv", 'model': "models/debs15_1_rnn.pkl"},
-                 {'name': 'f3', 'memory': 128, 'duration_mean': 0.3, 'duration_scv': 1.0, 'init_mean': 0.6, 'trace': "traces/synthetic/sawtooth-wave_arrivals.csv", 'model': "models/sawtooth-wave_rnn.pkl"},
-                 {'name': 'f4', 'memory': 1024, 'duration_mean': 0.25, 'duration_scv': 1.0, 'init_mean': 0.25, 'trace': "traces/synthetic/shifted-sinusoid_arrivals.csv", 'model': "models/shifted-sinusoid_rnn.pkl"},
-                 {'name': 'f5', 'memory': 256, 'duration_mean': 0.45, 'duration_scv': 1.0, 'init_mean': 0.5, 'trace': "traces/synthetic/square-wave_arrivals.csv", 'model': "models/square-wave_rnn.pkl"}]
+    nodes = [{'name': 'edge1', 'region': 'edge', 'memory': 2048},
+             {'name': 'edge2', 'region': 'edge', 'memory': 2048},
+             {'name': 'cloud1', 'region': 'cloud', 'cost': cloud_cost, 'speedup': cloud_speedup, 'memory': 32000}]
+    functions = [{'name': 'f1', 'memory': 512, 'duration_mean': 0.4, 'duration_scv': 1.0, 'init_mean': 0.5, 'edge': 'edge1', 'trace': "traces/synthetic/debs15_1_interarrivals.csv", 'model': "models/debs15_1_rnn.pkl"},
+                 {'name': 'f2', 'memory': 512, 'duration_mean': 0.4, 'duration_scv': 1.0, 'init_mean': 0.25, 'edge': 'edge1', 'trace': "traces/synthetic/debs15_2_interarrivals.csv", 'model': "models/debs15_1_rnn.pkl"},
+                 {'name': 'f3', 'memory': 128, 'duration_mean': 0.2, 'duration_scv': 1.0, 'init_mean': 0.6, 'edge': 'edge1', 'trace': "traces/synthetic/globus_arrivals.csv", 'model': "models/globus_rnn.pkl"},
+                 {'name': 'f4', 'memory': 128, 'duration_mean': 0.2, 'duration_scv': 1.0, 'init_mean': 0.25, 'edge': 'edge2', 'trace': "traces/synthetic/shifted-sinusoid_arrivals.csv", 'model': "models/shifted-sinusoid_rnn.pkl"},
+                 {'name': 'f5', 'memory': 128, 'duration_mean': 0.2, 'duration_scv': 1.0, 'init_mean': 0.5, 'edge': 'edge2', 'trace': "traces/synthetic/square-wave_arrivals.csv", 'model': "models/square-wave_rnn.pkl"},
+                 {'name': 'f6', 'memory': 128, 'duration_mean': 0.2, 'duration_scv': 1.0, 'init_mean': 0.6, 'edge': 'edge2', 'trace': "traces/synthetic/sawtooth-wave_arrivals.csv", 'model': "models/sawtooth-wave_rnn.pkl"}]
    
     #Extend functions list if needed
     if n_functions > len(functions):
@@ -110,14 +111,16 @@ def generate_random_temp_spec (rng, n_functions=5, load_coeff=1.0, dynamic_rate_
     else:
         classes = classes[:n_classes]
 
-
+    #print(f"funcs: {functions}")
+    #print(f"classes: {classes}")
+    #print(f"nodes: {nodes}")
 
     # Randomly set specs
     for f in functions:
-        f["duration_mean"] = float(rng.uniform(0.3,0.4))
+        #f["duration_mean"] = float(rng.uniform(0.3,0.4))
         f["init_mean"] = float(rng.uniform(0.25,0.75))
-        f["memory"] = float(rng.uniform(128,512))
-        f["duration_scv"] = float(rng.choice([1,0.5,0.25]))
+        #f["memory"] = float(rng.uniform(128,512))
+        #f["duration_scv"] = float(rng.choice([1,0.5,0.25]))
 
         myclip_a = 100
         myclip_b = 1024*1024*5
@@ -169,6 +172,7 @@ def write_spec (outf, functions, classes, nodes, load_coeff=1.0, dynamic_rate_co
 
     arrivals = []
     if arrivals_to_single_node:
+        print("SINGLE NODE")
         rate = 10*load_coeff
         for f in functions:
             # "exp" is the default value in case f['name'] does not exist
@@ -190,31 +194,30 @@ def write_spec (outf, functions, classes, nodes, load_coeff=1.0, dynamic_rate_co
             arrivals.append(arv)
 
     else:
+        print("ARRIVALS ON MULTIPLE NODES")
         edge_nodes = [n for n in nodes if "edge" in n["name"]]
         rate = 10*load_coeff/len(edge_nodes)
         for f in functions:
             distr = functions_arrival_distributions.get(f["name"], "exp")
-            print(f"distr: {distr}")
-            for n in edge_nodes:
-                if distr == "trace":
-                    arv = make_arrival_dict(n["name"], f["name"], _trace=f["trace"], _model=f["model"])
-                elif distr == "exp":
-                    arv = make_arrival_dict(n["name"], f["name"], dynamic_rate_coeff, _rate=rate)
+            if distr == "trace":
+                arv = make_arrival_dict(f["edge"], f["name"], _trace=f["trace"], _model=f["model"])
+            elif distr == "exp":
+                arv = make_arrival_dict(f["edge"], f["name"], dynamic_rate_coeff, _rate=rate)
+            else:
+                if distr == "erlang":
+                    D0,D1 = MAP.make_erlang2(rate)
+                elif distr == "hyper":
+                    D0,D1 = MAP.make_hyper(rate)
+                elif distr == "mmpp":
+                    D0,D1 = MAP.make_mmpp2(rate)
                 else:
-                    if distr == "erlang":
-                        D0,D1 = MAP.make_erlang2(rate)
-                    elif distr == "hyper":
-                        D0,D1 = MAP.make_hyper(rate)
-                    elif distr == "mmpp":
-                        D0,D1 = MAP.make_mmpp2(rate)
-                    else:
-                        raise ValueError(f"unknow distr: {distr}")
-                    arv = make_arrival_dict(n["name"], f["name"], dynamic_rate_coeff, _map=(D0,D1))
-                arrivals.append(arv)
+                    raise ValueError(f"unknow distr: {distr}")
+                arv = make_arrival_dict(f["edge"], f["name"], dynamic_rate_coeff, _map=(D0,D1))
+            arrivals.append(arv)
 
     spec = {'classes': classes, 'nodes': nodes, 'functions': functions, 'arrivals': arrivals}
     outf.write(yaml.dump(spec))
-    #print(yaml.dump(spec))
+    #print(spec)
     outf.flush()
 
 if __name__ == "__main__":

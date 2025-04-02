@@ -18,6 +18,7 @@ DEFAULT_CONFIG_FILE = "config.ini"
 DEFAULT_OUT_DIR = "results/results/"
 DEFAULT_DURATION = 3600
 SEEDS=[1,293,287844,2902,944,9573,102903,193,456,71]
+DOORS=[3600, 36000, 72000]
 PERCENTILES=np.array([1,5,10,25,50,75,90,95,99])/100.0
 
 
@@ -189,10 +190,10 @@ def experiment_main_comparison(args, config):
 
 
     #POLICIES = ["random", "basic", "basic-edge", "basic-budget", "probabilistic-legacy", "probabilistic", "greedy", "greedy-min-cost", "greedy-budget", "probabilistic-legacy-strict", "probabilistic-strict", "probabilistic-strictAlt", "probabilisticAlt"]
-    POLICIES = ["probabilistic-function", "predictive-function",\
-                "online-predictive-function", "online-adaptive-function",\
-                "probabilistic-memory-function", "predictive-memory-function",\
-                "online-predictive-memory-function", "online-adaptive-memory-function"]
+    POLICIES = ["probabilistic-function", "probabilistic-memory-function",
+                "predictive-function", "predictive-memory-function",
+                "online-predictive-function", "online-predictive-memory-function",
+                "online-adaptive-function", "online-adaptive-memory-function"]
 
     # Check existing results
     old_results = None
@@ -202,62 +203,67 @@ def experiment_main_comparison(args, config):
         except:
             pass
 
-    for seed in SEEDS:
-        config.set(conf.SEC_SIM, conf.SEED, str(seed))
-        seed_sequence = SeedSequence(seed)
-        for latency in [0.050, 0.100, 0.200]:
-            for budget in [1,2,10,20]:
-                config.set(conf.SEC_POLICY, conf.HOURLY_BUDGET, str(budget))
-                for functions in [3]:
-                    for pol in POLICIES:
-                        print(f"policy: {pol}")
-                        config.set(conf.SEC_POLICY, conf.POLICY_NAME, pol)
+    for door in DOORS:
+        config.set(conf.SEC_SIM, conf.CLOSE_DOOR_TIME, str(door))
+        for seed in SEEDS:
+            config.set(conf.SEC_SIM, conf.SEED, str(seed))
+            seed_sequence = SeedSequence(seed)
+            for latency in [0.200]: #[0.050, 0.100, 0.200]:
+                for budget in [20]:
+                    config.set(conf.SEC_POLICY, conf.HOURLY_BUDGET, str(budget))
+                    for functions in [6]:
+                        for pol in POLICIES:
+                            print(f"policy: {pol}")
+                            config.set(conf.SEC_POLICY, conf.POLICY_NAME, pol)
 
-                        if "greedy" in pol:
-                            config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "full-knowledge")
-                        else:
-                            config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "naive-per-function")
+                            if "greedy" in pol:
+                                config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "full-knowledge")
+                            else:
+                                config.set(conf.SEC_POLICY, conf.LOCAL_COLD_START_EST_STRATEGY, "naive-per-function")
 
-                        keys = {}
-                        keys["Policy"] = pol
-                        keys["Seed"] = seed
-                        keys["Functions"] = functions
-                        keys["Latency"] = latency
-                        keys["Budget"] = budget
+                            keys = {}
+                            keys["Door"] = door
+                            keys["Policy"] = pol
+                            keys["Seed"] = seed
+                            keys["Functions"] = functions
+                            keys["Latency"] = latency
+                            keys["Budget"] = budget
 
-                        run_string = "_".join([f"{k}{v}" for k,v in keys.items()])
+                            #run_string = "_".join([f"{k}{v}" for k,v in keys.items()])
 
-                        # Check if we can skip this run
-                        if old_results is not None and not\
-                                old_results[(old_results.Seed == seed) &\
-                                    (old_results.Latency == latency) &\
-                                    (old_results.Functions == functions) &\
-                                    (old_results.Budget == budget) &\
-                                    (old_results.Policy == pol)].empty:
-                            print("Skipping conf")
-                            continue
+                            # Check if we can skip this run
+                            if old_results is not None and not\
+                                    old_results[(old_results.Seed == seed) & \
+                                        (old_results.Door == door) & \
+                                        (old_results.Latency == latency) &\
+                                        (old_results.Functions == functions) &\
+                                        (old_results.Budget == budget) &\
+                                        (old_results.Policy == pol)].empty:
+                                print("Skipping conf")
+                                continue
 
-                        rng = default_rng(seed_sequence.spawn(1)[0])
-                        temp_spec_file = generate_random_temp_spec (rng, n_functions=functions, dynamic_rate_coeff=0.0)
-                        infra = default_infra(edge_cloud_latency=latency)
-                        stats = _experiment(config, seed_sequence, infra, temp_spec_file.name)
-                        temp_spec_file.close()
-                        with open(os.path.join(DEFAULT_OUT_DIR, f"{exp_tag}_{run_string}.json"), "w") as of:
-                            stats.print(of)
+                            rng = default_rng(seed_sequence.spawn(1)[0])
+                            temp_spec_file = generate_random_temp_spec (rng, n_functions=functions, n_edges=2, dynamic_rate_coeff=0.0, arrivals_to_single_node=True)
+                            infra = default_infra(edge_cloud_latency=latency)
+                            stats = _experiment(config, seed_sequence, infra, temp_spec_file.name)
+                            temp_spec_file.close()
+                            #with open(os.path.join(DEFAULT_OUT_DIR, f"{exp_tag}_{run_string}.json"), "w") as of:
+                            #    stats.print(of)
 
-                        result=dict(list(keys.items()) + list(relevant_stats_dict(stats).items()))
-                        results.append(result)
-                        print(result)
+                            result=dict(list(keys.items()) + list(relevant_stats_dict(stats).items()))
+                            results.append(result)
+                            #print(result)
 
-                        resultsDf = pd.DataFrame(results)
-                        if old_results is not None:
-                            resultsDf = pd.concat([old_results, resultsDf])
-                        resultsDf.to_csv(outfile, index=False)
+                            resultsDf = pd.DataFrame(results)
+                            if old_results is not None:
+                                resultsDf = pd.concat([old_results, resultsDf])
+                            resultsDf.to_csv(outfile, index=False)
     
     resultsDf = pd.DataFrame(results)
     if old_results is not None:
         resultsDf = pd.concat([old_results, resultsDf])
     resultsDf.to_csv(outfile, index=False)
+    print("means:")
     print(resultsDf.groupby("Policy").mean())
 
     with open(os.path.join(DEFAULT_OUT_DIR, f"{exp_tag}_conf.ini"), "w") as of:
